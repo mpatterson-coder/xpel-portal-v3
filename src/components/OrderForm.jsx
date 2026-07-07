@@ -1,0 +1,202 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { getCatalog, createOrder } from '../lib/db'
+import { decodeVin, isLikelyVin } from '../lib/vin'
+import { COLOR as X, FONT, money } from '../lib/theme'
+
+const SIZES = ['standard', 'midsize', 'fullsize']
+
+// V3 ordering flow. IMPORTANT DESIGN PRINCIPLE: nothing here is hardcoded to
+// any product, package, category, or tier. The screen groups whatever is in
+// the live catalog by its category field, so anything an admin creates in
+// Catalog & Pricing — new categories included — appears here automatically.
+export default function OrderForm({ onCreated }) {
+  const { profile } = useAuth()
+  const [catalog, setCatalog] = useState([])
+  const [loadErr, setLoadErr] = useState('')
+
+  const [vin, setVin] = useState('')
+  const [veh, setVeh] = useState({ year: '', make: '', model: '', trim: '', size: '' })
+  const [decoded, setDecoded] = useState(false)
+  const [cust, setCust] = useState({ name: '', phone: '' })
+  const [dap, setDap] = useState('')
+  const [lines, setLines] = useState([])
+  const [showMargin, setShowMargin] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => { getCatalog().then(setCatalog).catch((e) => setLoadErr(e.message)) }, [])
+
+  // Dynamic category grouping — the admin's catalog drives the layout.
+  const byCategory = useMemo(() => {
+    const map = new Map()
+    for (const p of catalog) {
+      const key = p.category || 'Other'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(p)
+    }
+    return Array.from(map.entries())
+  }, [catalog])
+
+  function handleDecode() {
+    const { year } = decodeVin(vin)
+    setDecoded(true)
+    if (year) setVeh((v) => ({ ...v, year: String(year) }))
+  }
+
+  function addLine(product) {
+    setLines((ls) => {
+      const found = ls.find((l) => l.product.id === product.id)
+      if (found) return ls.map((l) => (l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l))
+      return [...ls, { product, quantity: 1 }]
+    })
+  }
+  const setQty = (id, q) => setLines((ls) => ls.map((l) => (l.product.id === id ? { ...l, quantity: Math.max(1, q) } : l)))
+  const removeLine = (id) => setLines((ls) => ls.filter((l) => l.product.id !== id))
+
+  const totals = useMemo(() => {
+    let revenue = 0, cost = 0
+    for (const l of lines) {
+      revenue += Number(l.product.effective_price) * l.quantity
+      cost += Number(l.product.cost) * l.quantity
+    }
+    return { revenue, cost, margin: revenue - cost, marginPct: revenue ? Math.round(((revenue - cost) / revenue) * 100) : 0 }
+  }, [lines])
+
+  const canSubmit = lines.length > 0 && cust.name.trim() && veh.size && !busy
+
+  async function submit() {
+    setBusy(true); setMsg('')
+    try {
+      const order = await createOrder(profile, {
+        lines: lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity, unit_price: l.product.effective_price })),
+        customer_name: cust.name.trim(),
+        customer_phone: cust.phone.trim() || null,
+        vin: vin.trim() || null,
+        vehicle_year: veh.year ? Number(veh.year) : null,
+        vehicle_make: veh.make.trim() || null,
+        vehicle_model: veh.model.trim() || null,
+        vehicle_trim: veh.trim.trim() || null,
+        vehicle_size: veh.size,
+        dap_work_order: dap.trim() || null,
+      })
+      setMsg(`Order ${order.order_number} submitted.`)
+      setVin(''); setVeh({ year: '', make: '', model: '', trim: '', size: '' }); setDecoded(false)
+      setCust({ name: '', phone: '' }); setDap(''); setLines([])
+      onCreated?.()
+    } catch (e) { setMsg(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={card}>
+      <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: FONT.headingWeight }}>New Protection Order</h2>
+
+      <Label>Vehicle</Label>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="VIN (17 characters)" style={{ ...input, flex: 1 }} />
+        <button onClick={handleDecode} disabled={!isLikelyVin(vin)} style={{ ...btnDark, opacity: isLikelyVin(vin) ? 1 : 0.5 }}>Decode</button>
+      </div>
+      {decoded && (
+        <>
+          <div style={{ fontSize: 12.5, color: X.teal, margin: '8px 0 4px' }}>
+            Year decoded from the VIN. Confirm make, model, trim and size below.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {['year', 'make', 'model', 'trim'].map((k) => (
+              <div key={k}>
+                <div style={{ fontSize: 10.5, color: X.slate, marginBottom: 4, textTransform: 'capitalize' }}>{k}</div>
+                <input value={veh[k]} onChange={(e) => setVeh({ ...veh, [k]: e.target.value })} style={input} />
+              </div>
+            ))}
+          </div>
+          <Label>Vehicle Size</Label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {SIZES.map((s) => (
+              <button key={s} onClick={() => setVeh({ ...veh, size: s })} style={{ ...pill, ...(veh.size === s ? pillOn : {}) }}>{s}</button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 16 }}>
+        {[['Customer name', cust.name, (v) => setCust({ ...cust, name: v })],
+          ['Phone', cust.phone, (v) => setCust({ ...cust, phone: v })],
+          ['DAP work order #', dap, setDap]].map(([lbl, val, set]) => (
+          <div key={lbl}>
+            <div style={{ fontSize: 10.5, color: X.slate, marginBottom: 4 }}>{lbl}</div>
+            <input value={val} onChange={(e) => set(e.target.value)} style={input} />
+          </div>
+        ))}
+      </div>
+
+      {loadErr && <div style={{ color: X.red, fontSize: 13, marginTop: 12 }}>{loadErr}</div>}
+
+      {/* Catalog — one section per category, entirely driven by admin data */}
+      {byCategory.map(([category, products]) => (
+        <div key={category}>
+          <Label>{category}</Label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            {products.map((p) => (
+              <button key={p.id} onClick={() => addLine(p)} style={catItem} title={p.description || ''}>
+                <div style={{ minWidth: 0 }}>
+                  {p.tier && <span style={tierTag}>{p.tier}</span>}
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
+                  {p.description && <div style={desc}>{p.description}</div>}
+                </div>
+                <div style={{ fontWeight: 700, whiteSpace: 'nowrap', marginLeft: 8 }}>{money(p.effective_price)}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {lines.length > 0 && (
+        <div style={{ marginTop: 16, borderTop: `1px solid ${X.line}`, paddingTop: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Label noTop>Order Summary</Label>
+            <label style={{ fontSize: 12, color: X.slate, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+              <input type="checkbox" checked={showMargin} onChange={(e) => setShowMargin(e.target.checked)} /> Show margin
+            </label>
+          </div>
+          {lines.map((l) => (
+            <div key={l.product.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+              <div style={{ flex: 1, fontSize: 14 }}>{l.product.name}</div>
+              <input type="number" min="1" value={l.quantity} onChange={(e) => setQty(l.product.id, Number(e.target.value))} style={{ ...input, width: 56, padding: '6px 8px' }} />
+              <div style={{ width: 90, textAlign: 'right' }}>{money(l.product.effective_price * l.quantity)}</div>
+              {showMargin && <div style={{ width: 90, textAlign: 'right', color: X.teal, fontSize: 13 }}>+{money((l.product.effective_price - l.product.cost) * l.quantity)}</div>}
+              <button onClick={() => removeLine(l.product.id)} style={xBtn}>×</button>
+            </div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontWeight: 800, fontSize: 16 }}>
+            <span>Total</span><span>{money(totals.revenue)}</span>
+          </div>
+          {showMargin && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: X.teal, fontSize: 13 }}>
+              <span>Margin ({totals.marginPct}% of revenue)</span><span>{money(totals.margin)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {msg && <div style={{ marginTop: 12, color: msg.includes('submitted') ? X.teal : X.red, fontSize: 14 }}>{msg}</div>}
+      <button onClick={submit} disabled={!canSubmit} style={{ ...btnPrimary, opacity: canSubmit ? 1 : 0.5, marginTop: 16 }}>
+        {busy ? 'Submitting…' : 'Submit Order'}
+      </button>
+    </div>
+  )
+}
+
+const Label = ({ children, noTop }) => (
+  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: FONT.subWeight, margin: noTop ? '0 0 6px' : '16px 0 6px' }}>{children}</div>
+)
+
+const card = { background: X.panel, border: `1px solid ${X.line}`, borderRadius: 12, padding: 24, maxWidth: 780, fontFamily: FONT.body }
+const input = { width: '100%', boxSizing: 'border-box', border: `1px solid ${X.gray}`, borderRadius: 8, padding: '10px 11px', fontSize: 14, fontFamily: FONT.body }
+const pill = { flex: 1, textTransform: 'capitalize', border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 8, padding: '10px', cursor: 'pointer', fontFamily: FONT.body, fontWeight: 500 }
+const pillOn = { background: X.black, color: '#fff', borderColor: X.black }
+const catItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', border: `1px solid ${X.line}`, borderRadius: 10, padding: '10px 12px', background: '#fff', cursor: 'pointer', fontFamily: FONT.body }
+const tierTag = { display: 'inline-block', fontSize: 10, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: 700, color: X.black, background: X.yellow, borderRadius: 4, padding: '1px 7px', marginBottom: 4 }
+const desc = { fontSize: 11.5, color: X.slate, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }
+const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 8, padding: '13px 18px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body, fontSize: 13 }
+const btnDark = { background: X.black, color: '#fff', border: 'none', borderRadius: 8, padding: '0 18px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT.body }
+const xBtn = { border: 'none', background: 'transparent', color: X.red, fontSize: 20, cursor: 'pointer', lineHeight: 1 }
