@@ -198,3 +198,9 @@ export async function getNetworkPerformance() {
     marginPct: r.revenue ? Math.round(((r.revenue - r.cost) / r.revenue) * 100) : 0,
   }))
 }
+
+// Installer (or admin) attaches the DAP work order number to an order.
+export async function setOrderWorkOrder(orderId, dap_work_order) {
+  const { error } = await supabase.from('orders').update({ dap_work_order }).eq('id', orderId)
+  if (error) throw error
+}
