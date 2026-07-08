@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getOrders, getOrderDetail, updateOrderStatus } from '../lib/db'
+import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder } from '../lib/db'
 
 const X = { yellow: '#FDB521', black: '#000', teal: '#1A9392', slate: '#505A72', red: '#C94543', gray: '#D1D3D5', green: '#2E7D5B' }
 const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -50,7 +50,13 @@ function QueueRow({ order, onChanged }) {
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [dapDraft, setDapDraft] = useState(order.dap_work_order || '')
   const missingDap = !order.dap_work_order
+
+  async function saveDap() {
+    setBusy(true)
+    try { await setOrderWorkOrder(order.id, dapDraft.trim() || null); await onChanged() } finally { setBusy(false) }
+  }
 
   async function toggle() {
     const next = !open
@@ -94,6 +100,13 @@ function QueueRow({ order, onChanged }) {
           {detail?.error && <div style={{ color: X.red, fontSize: 13 }}>{detail.error}</div>}
           {detail && !detail.error && (
             <>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }}>DAP work order #</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 340 }}>
+                <input value={dapDraft} onChange={(e) => setDapDraft(e.target.value)} placeholder="Enter DAP work order number"
+                  style={{ flex: 1, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '8px 10px', fontSize: 14, fontFamily: "'Jost', sans-serif" }} />
+                <button disabled={busy || (dapDraft.trim() === (order.dap_work_order || ''))} onClick={saveDap}
+                  style={{ ...advBtn, opacity: busy || (dapDraft.trim() === (order.dap_work_order || '')) ? 0.5 : 1 }}>Save</button>
+              </div>
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }}>Coverage</div>
               {detail.items.map((it) => (
                 <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '2px 0' }}>

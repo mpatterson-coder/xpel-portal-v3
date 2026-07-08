@@ -4,31 +4,40 @@ import { getGroups, getDealerships, getOrders, getNetworkPerformance } from '../
 import UsersAdmin from './UsersAdmin'
 import NetworkAdmin from './NetworkAdmin'
 import CatalogAdmin from './CatalogAdmin'
+import OrdersList from './OrdersList'
+import { COLOR as X, FONT, money as fm } from '../lib/theme'
 
-const X = { yellow: '#FDB521', black: '#000', teal: '#1A9392', slate: '#505A72', red: '#C94543', gray: '#D1D3D5', green: '#2E7D5B' }
-const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })
+const money = (n) => fm(n, 0)
 const STATUSES = ['submitted', 'in_review', 'approved', 'in_progress', 'completed', 'cancelled']
-const TABS = { overview: 'Overview', users: 'Users', network: 'Network', catalog: 'Catalog & Pricing' }
+const TABS = { overview: 'Overview', orders: 'Orders', users: 'Users', network: 'Network', catalog: 'Catalog & Pricing' }
 
-// The Admin (XPEL) area: network-wide oversight PLUS in-app management of
-// users, the dealer network, and the catalog. All management writes are
-// admin-only, enforced by the database's row-level security.
+// Admin area. The Overview is fully interactive: stat cards and status tiles
+// navigate to the data they represent (Orders view with a preset filter, the
+// Network tab, etc.).
 export default function AdminDashboard() {
   const [tab, setTab] = useState('overview')
+  const [orderFilter, setOrderFilter] = useState('all')
+
+  const go = (nextTab, filter) => {
+    if (filter) setOrderFilter(filter)
+    setTab(nextTab)
+  }
+
   return (
-    <div style={{ maxWidth: 1000 }}>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+    <div style={{ maxWidth: 1000, fontFamily: FONT.body }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {Object.entries(TABS).map(([k, lbl]) => (
-          <button key={k} onClick={() => setTab(k)}
+          <button key={k} onClick={() => { if (k === 'orders') setOrderFilter('all'); setTab(k) }}
             style={{
               border: `1px solid ${tab === k ? X.black : X.gray}`, background: tab === k ? X.black : '#fff',
-              color: tab === k ? '#fff' : X.slate, borderRadius: 6, padding: '8px 14px', fontSize: 12,
-              fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer',
-              fontFamily: "'Jost', sans-serif",
+              color: tab === k ? '#fff' : X.slate, borderRadius: 8, padding: '8px 14px', fontSize: 12,
+              fontWeight: 700, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer',
+              fontFamily: FONT.body,
             }}>{lbl}</button>
         ))}
       </div>
-      {tab === 'overview' && <OverviewTab />}
+      {tab === 'overview' && <OverviewTab onNavigate={go} />}
+      {tab === 'orders' && <OrdersTab filter={orderFilter} setFilter={setOrderFilter} />}
       {tab === 'users' && <UsersAdmin />}
       {tab === 'network' && <NetworkAdmin />}
       {tab === 'catalog' && <CatalogAdmin />}
@@ -36,7 +45,7 @@ export default function AdminDashboard() {
   )
 }
 
-function OverviewTab() {
+function OverviewTab({ onNavigate }) {
   const [groups, setGroups] = useState([])
   const [dealerships, setDealerships] = useState([])
   const [orders, setOrders] = useState([])
@@ -56,15 +65,9 @@ function OverviewTab() {
     for (const d of dealerships) rooftopsByGroup.set(d.group_id, (rooftopsByGroup.get(d.group_id) || 0) + 1)
     for (const o of orders) ordersByGroup.set(o.group_id, (ordersByGroup.get(o.group_id) || 0) + 1)
     const perfByGroup = new Map(perf.map((p) => [p.group_id, p]))
-
     const rows = groups.map((g) => {
       const p = perfByGroup.get(g.id) || { revenue: 0, margin: 0, marginPct: 0 }
-      return {
-        name: g.name,
-        rooftops: rooftopsByGroup.get(g.id) || 0,
-        orders: ordersByGroup.get(g.id) || 0,
-        revenue: p.revenue, margin: p.margin, marginPct: p.marginPct,
-      }
+      return { name: g.name, rooftops: rooftopsByGroup.get(g.id) || 0, orders: ordersByGroup.get(g.id) || 0, revenue: p.revenue, margin: p.margin, marginPct: p.marginPct }
     })
     const statusCounts = STATUSES.map((s) => ({ status: s, n: orders.filter((o) => o.status === s).length }))
     return { revenue, rows, statusCounts }
@@ -72,14 +75,14 @@ function OverviewTab() {
 
   return (
     <div>
-      <h2 style={{ margin: '0 0 16px', fontSize: 20 }}>Network Overview</h2>
+      <h2 style={{ margin: '0 0 16px', fontSize: 20, fontWeight: FONT.headingWeight }}>Network Overview</h2>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <Stat label="Dealer groups" value={groups.length} />
-        <Stat label="Enrolled rooftops" value={dealerships.length} />
-        <Stat label="Orders" value={orders.length} />
-        <Stat label="Network revenue" value={money(view.revenue)} />
+        <Stat label="Dealer groups" value={groups.length} onClick={() => onNavigate('network')} />
+        <Stat label="Enrolled rooftops" value={dealerships.length} onClick={() => onNavigate('network')} />
+        <Stat label="Orders" value={orders.length} onClick={() => onNavigate('orders', 'all')} />
+        <Stat label="Network revenue" value={money(view.revenue)} onClick={() => onNavigate('orders', 'all')} />
       </div>
 
       <Panel title="Sales performance by group">
@@ -88,7 +91,7 @@ function OverviewTab() {
             <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: 'Jost' }} />
             <YAxis tickFormatter={(v) => money(v)} tick={{ fontSize: 11 }} width={70} />
             <Tooltip formatter={(v) => money(v)} />
-            <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="revenue" radius={[4, 4, 0, 0]} cursor="pointer" onClick={() => onNavigate('orders', 'all')}>
               {view.rows.map((_, i) => <Cell key={i} fill={X.yellow} />)}
             </Bar>
           </BarChart>
@@ -99,7 +102,9 @@ function OverviewTab() {
           </thead>
           <tbody>
             {view.rows.map((r) => (
-              <tr key={r.name}>
+              <tr key={r.name} onClick={() => onNavigate('orders', 'all')} style={{ cursor: 'pointer' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#FAFBFC'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = ''}>
                 <Td>{r.name}</Td><Td r>{r.rooftops}</Td><Td r>{r.orders}</Td>
                 <Td r>{money(r.revenue)}</Td><Td r style={{ color: X.teal }}>{money(r.margin)}</Td><Td r>{r.marginPct}%</Td>
               </tr>
@@ -108,13 +113,15 @@ function OverviewTab() {
         </table>
       </Panel>
 
-      <Panel title="Operational performance">
+      <Panel title="Operational performance — click a status to see its orders">
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {view.statusCounts.map((s) => (
-            <div key={s.status} style={opCard}>
+            <button key={s.status} onClick={() => onNavigate('orders', s.status)} style={opCard}>
               <div style={{ fontSize: 22, fontWeight: 800 }}>{s.n}</div>
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, fontFamily: 'Jost' }}>{s.status.replace('_', ' ')}</div>
-            </div>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: FONT.subWeight }}>
+                {s.status.replace('_', ' ')}
+              </div>
+            </button>
           ))}
         </div>
       </Panel>
@@ -122,19 +129,50 @@ function OverviewTab() {
   )
 }
 
-const Stat = ({ label, value }) => (
-  <div style={{ background: X.black, borderRadius: 10, padding: 18 }}>
+function OrdersTab({ filter, setFilter }) {
+  const [orders, setOrders] = useState([])
+  const [err, setErr] = useState('')
+  useEffect(() => { getOrders().then(setOrders).catch((e) => setErr(e.message)) }, [])
+
+  const shown = filter === 'all' ? orders : orders.filter((o) => o.status === filter)
+  const title = filter === 'all' ? 'All Orders' : `Orders — ${filter.replace('_', ' ')}`
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {['all', ...STATUSES].map((s) => (
+          <button key={s} onClick={() => setFilter(s)}
+            style={{ ...chip, ...(filter === s ? chipOn : {}) }}>
+            {s === 'all' ? 'All' : s.replace('_', ' ')}
+          </button>
+        ))}
+      </div>
+      {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
+      <OrdersList orders={shown} title={title} />
+    </div>
+  )
+}
+
+const Stat = ({ label, value, onClick }) => (
+  <button onClick={onClick}
+    style={{ background: X.black, borderRadius: 12, padding: 18, border: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: FONT.body }}
+    onMouseEnter={(e) => e.currentTarget.style.outline = `2px solid ${X.yellow}`}
+    onMouseLeave={(e) => e.currentTarget.style.outline = 'none'}>
     <div style={{ color: '#fff', fontSize: 26, fontWeight: 800 }}>{value}</div>
-    <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, fontFamily: 'Jost', marginTop: 4 }}>{label}</div>
-  </div>
+    <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label} →</div>
+  </button>
 )
+
 const Panel = ({ title, children }) => (
-  <div style={{ background: '#fff', border: `1px solid ${X.gray}`, borderRadius: 10, padding: 20, marginTop: 16 }}>
-    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, color: X.slate, fontFamily: 'Jost', marginBottom: 12 }}>{title}</div>
+  <div style={{ background: '#fff', border: `1px solid ${X.line}`, borderRadius: 12, padding: 20, marginTop: 16 }}>
+    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: FONT.subWeight, marginBottom: 12 }}>{title}</div>
     {children}
   </div>
 )
-const Th = ({ children, r }) => <th style={{ textAlign: r ? 'right' : 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, padding: '8px 6px', borderBottom: `1px solid ${X.gray}` }}>{children}</th>
-const Td = ({ children, r, style }) => <td style={{ textAlign: r ? 'right' : 'left', fontSize: 14, padding: '8px 6px', borderBottom: `1px solid #EEF0F2`, ...style }}>{children}</td>
+
+const Th = ({ children, r }) => <th style={{ textAlign: r ? 'right' : 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: X.slate, padding: '8px 6px', borderBottom: `1px solid ${X.gray}` }}>{children}</th>
+const Td = ({ children, r, style }) => <td style={{ textAlign: r ? 'right' : 'left', fontSize: 14, padding: '8px 6px', borderBottom: `1px solid ${X.line}`, ...style }}>{children}</td>
 const tbl = { width: '100%', borderCollapse: 'collapse', marginTop: 12 }
-const opCard = { flex: '1 1 120px', background: '#FAFBFC', border: `1px solid ${X.gray}`, borderRadius: 8, padding: 14, textAlign: 'center' }
+const opCard = { flex: '1 1 120px', background: '#FAFBFC', border: `1px solid ${X.line}`, borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', fontFamily: FONT.body }
+const chip = { border: `1px solid ${X.gray}`, background: '#fff', color: X.slate, borderRadius: 8, padding: '7px 13px', fontSize: 12, fontWeight: 600, textTransform: 'capitalize', cursor: 'pointer', fontFamily: FONT.body }
+const chipOn = { background: X.black, color: '#fff', borderColor: X.black }

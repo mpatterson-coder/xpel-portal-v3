@@ -9,6 +9,7 @@ export default function NetworkAdmin() {
   const [stores, setStores] = useState([])
   const [err, setErr] = useState('')
   const [newGroup, setNewGroup] = useState('')
+  const [indie, setIndie] = useState(null) // {name, city, state} when adding an independent rooftop
 
   const load = () =>
     Promise.all([getGroups(), getDealerships()])
@@ -28,9 +29,34 @@ export default function NetworkAdmin() {
         <div style={{ display: 'flex', gap: 8 }}>
           <input placeholder="New dealer group name" value={newGroup} onChange={(e) => setNewGroup(e.target.value)} style={input} />
           <button style={btnPrimary} onClick={addGroup}>+ Add Group</button>
+          <button style={btnGhostTop} onClick={() => setIndie(indie ? null : { name: '', city: '', state: '' })}>
+            {indie ? 'Cancel' : '+ Add Independent Dealership'}
+          </button>
         </div>
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
+      {indie && (
+        <div style={{ ...panel, marginBottom: 12, background: '#FFFDF5', border: `1px solid ${X.yellow}` }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Independent Dealership</div>
+          <div style={{ fontSize: 12.5, color: X.slate, marginBottom: 10 }}>
+            For rooftops not tied to a larger group. It gets its own private space with the same
+            data walls as any group — nobody else can see its orders or pricing.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input placeholder="Dealership name" value={indie.name} onChange={(e) => setIndie({ ...indie, name: e.target.value })} style={{ ...input, flex: 2 }} />
+            <input placeholder="City" value={indie.city} onChange={(e) => setIndie({ ...indie, city: e.target.value })} style={{ ...input, flex: 1 }} />
+            <input placeholder="State" value={indie.state} onChange={(e) => setIndie({ ...indie, state: e.target.value })} style={{ ...input, width: 70 }} />
+            <button style={{ ...btnPrimary, opacity: indie.name.trim() ? 1 : 0.5 }} disabled={!indie.name.trim()}
+              onClick={async () => {
+                try {
+                  const g = await createGroup(indie.name.trim())
+                  await createDealership({ group_id: g.id, name: indie.name.trim(), city: indie.city.trim(), state: indie.state.trim() })
+                  setIndie(null); load()
+                } catch (e) { setErr(e.message) }
+              }}>Add</button>
+          </div>
+        </div>
+      )}
       {groups.map((g) => (
         <GroupCard key={g.id} group={g} stores={stores.filter((s) => s.group_id === g.id)} onChanged={load} onError={setErr} />
       ))}
@@ -102,4 +128,5 @@ function StoreRow({ store, onChanged, onError }) {
 const panel = { background: '#fff', border: `1px solid ${X.gray}`, borderRadius: 10, padding: 16 }
 const input = { border: `1px solid ${X.gray}`, borderRadius: 6, padding: '8px 10px', fontSize: 14, fontFamily: "'Jost', sans-serif", background: '#fff' }
 const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
+const btnGhostTop = { background: '#fff', color: '#505A72', border: '1px solid #D1D3D5', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
 const btnGhost = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 6, padding: '8px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: "'Jost', sans-serif" }

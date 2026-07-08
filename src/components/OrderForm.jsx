@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getCatalog, createOrder } from '../lib/db'
-import { decodeVin, isLikelyVin } from '../lib/vin'
+import { decodeVinFull, isLikelyVin } from '../lib/vin'
 import { COLOR as X, FONT, money } from '../lib/theme'
 
 const SIZES = ['standard', 'midsize', 'fullsize']
@@ -19,7 +19,6 @@ export default function OrderForm({ onCreated }) {
   const [veh, setVeh] = useState({ year: '', make: '', model: '', trim: '', size: '' })
   const [decoded, setDecoded] = useState(false)
   const [cust, setCust] = useState({ name: '', phone: '' })
-  const [dap, setDap] = useState('')
   const [lines, setLines] = useState([])
   const [showMargin, setShowMargin] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -38,10 +37,26 @@ export default function OrderForm({ onCreated }) {
     return Array.from(map.entries())
   }, [catalog])
 
-  function handleDecode() {
-    const { year } = decodeVin(vin)
+  const [decoding, setDecoding] = useState(false)
+  const [decodeNote, setDecodeNote] = useState('')
+
+  async function handleDecode() {
+    setDecoding(true); setDecodeNote('')
+    const d = await decodeVinFull(vin)
+    setVeh({
+      year: d.year ? String(d.year) : '',
+      make: d.make || '',
+      model: d.model || '',
+      trim: d.trim || '',
+      size: d.size || '',
+    })
     setDecoded(true)
-    if (year) setVeh((v) => ({ ...v, year: String(year) }))
+    setDecoding(false)
+    setDecodeNote(d.source === 'nhtsa'
+      ? (d.size
+          ? 'Vehicle decoded. Size pre-selected from body style — confirm or adjust below.'
+          : 'Vehicle decoded. Confirm details and choose a size below.')
+      : 'Vehicle lookup unavailable — year decoded locally. Enter make, model, trim and size.')
   }
 
   function addLine(product) {
@@ -78,11 +93,10 @@ export default function OrderForm({ onCreated }) {
         vehicle_model: veh.model.trim() || null,
         vehicle_trim: veh.trim.trim() || null,
         vehicle_size: veh.size,
-        dap_work_order: dap.trim() || null,
       })
       setMsg(`Order ${order.order_number} submitted.`)
       setVin(''); setVeh({ year: '', make: '', model: '', trim: '', size: '' }); setDecoded(false)
-      setCust({ name: '', phone: '' }); setDap(''); setLines([])
+      setCust({ name: '', phone: '' }); setLines([])
       onCreated?.()
     } catch (e) { setMsg(e.message) } finally { setBusy(false) }
   }
@@ -94,13 +108,11 @@ export default function OrderForm({ onCreated }) {
       <Label>Vehicle</Label>
       <div style={{ display: 'flex', gap: 8 }}>
         <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="VIN (17 characters)" style={{ ...input, flex: 1 }} />
-        <button onClick={handleDecode} disabled={!isLikelyVin(vin)} style={{ ...btnDark, opacity: isLikelyVin(vin) ? 1 : 0.5 }}>Decode</button>
+        <button onClick={handleDecode} disabled={!isLikelyVin(vin) || decoding} style={{ ...btnDark, opacity: isLikelyVin(vin) && !decoding ? 1 : 0.5 }}>{decoding ? 'Decoding…' : 'Decode'}</button>
       </div>
       {decoded && (
         <>
-          <div style={{ fontSize: 12.5, color: X.teal, margin: '8px 0 4px' }}>
-            Year decoded from the VIN. Confirm make, model, trim and size below.
-          </div>
+          <div style={{ fontSize: 12.5, color: X.teal, margin: '8px 0 4px' }}>{decodeNote}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
             {['year', 'make', 'model', 'trim'].map((k) => (
               <div key={k}>
@@ -118,10 +130,9 @@ export default function OrderForm({ onCreated }) {
         </>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 16 }}>
         {[['Customer name', cust.name, (v) => setCust({ ...cust, name: v })],
-          ['Phone', cust.phone, (v) => setCust({ ...cust, phone: v })],
-          ['DAP work order #', dap, setDap]].map(([lbl, val, set]) => (
+          ['Phone', cust.phone, (v) => setCust({ ...cust, phone: v })]].map(([lbl, val, set]) => (
           <div key={lbl}>
             <div style={{ fontSize: 10.5, color: X.slate, marginBottom: 4 }}>{lbl}</div>
             <input value={val} onChange={(e) => set(e.target.value)} style={input} />
@@ -136,16 +147,23 @@ export default function OrderForm({ onCreated }) {
         <div key={category}>
           <Label>{category}</Label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-            {products.map((p) => (
-              <button key={p.id} onClick={() => addLine(p)} style={catItem} title={p.description || ''}>
-                <div style={{ minWidth: 0 }}>
-                  {p.tier && <span style={tierTag}>{p.tier}</span>}
-                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
-                  {p.description && <div style={desc}>{p.description}</div>}
-                </div>
-                <div style={{ fontWeight: 700, whiteSpace: 'nowrap', marginLeft: 8 }}>{money(p.effective_price)}</div>
-              </button>
-            ))}
+            {products.map((p) => {
+              const inCart = lines.find((l) => l.product.id === p.id)
+              return (
+                <button key={p.id} onClick={() => addLine(p)}
+                  style={{ ...catItem, ...(inCart ? catItemOn : {}) }} title={p.description || ''}>
+                  <div style={{ minWidth: 0 }}>
+                    {p.tier && <span style={tierTag}>{p.tier}</span>}
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
+                    {p.description && <div style={desc}>{p.description}</div>}
+                  </div>
+                  <div style={{ textAlign: 'right', marginLeft: 8 }}>
+                    <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{money(p.effective_price)}</div>
+                    {inCart && <div style={inCartTag}>✓ In order{inCart.quantity > 1 ? ` ×${inCart.quantity}` : ''}</div>}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </div>
       ))}
@@ -194,6 +212,8 @@ const card = { background: X.panel, border: `1px solid ${X.line}`, borderRadius:
 const input = { width: '100%', boxSizing: 'border-box', border: `1px solid ${X.gray}`, borderRadius: 8, padding: '10px 11px', fontSize: 14, fontFamily: FONT.body }
 const pill = { flex: 1, textTransform: 'capitalize', border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 8, padding: '10px', cursor: 'pointer', fontFamily: FONT.body, fontWeight: 500 }
 const pillOn = { background: X.black, color: '#fff', borderColor: X.black }
+const catItemOn = { borderColor: '#FDB521', borderWidth: 2, background: '#FFFBEF', boxShadow: '0 0 0 1px #FDB52133' }
+const inCartTag = { marginTop: 3, fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#000', background: '#FDB521', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }
 const catItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', border: `1px solid ${X.line}`, borderRadius: 10, padding: '10px 12px', background: '#fff', cursor: 'pointer', fontFamily: FONT.body }
 const tierTag = { display: 'inline-block', fontSize: 10, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: 700, color: X.black, background: X.yellow, borderRadius: 4, padding: '1px 7px', marginBottom: 4 }
 const desc = { fontSize: 11.5, color: X.slate, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }
