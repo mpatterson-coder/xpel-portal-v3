@@ -77,8 +77,16 @@ function AddUserCard({ groups, stores, onDone, onCancel }) {
   }
 
   const storesInGroup = stores.filter((s) => s.group_id === f.group_id)
-  const ready = f.email.trim() && f.password.length >= 6 &&
-    (f.role === 'admin' || (f.group_id && (f.role !== 'dealership' || f.dealership_id)))
+  const groupHasNoRooftops = f.role === 'dealership' && f.group_id && storesInGroup.length === 0
+
+  // Everything the Create button is waiting on, spelled out for the admin —
+  // a silently disabled button is a dead end.
+  const missing = []
+  if (!f.email.trim()) missing.push('an email address')
+  if (f.password.length < 6) missing.push('a password of at least 6 characters')
+  if (f.role !== 'admin' && !f.group_id) missing.push('a group')
+  if (f.role === 'dealership' && f.group_id && !f.dealership_id) missing.push('a rooftop')
+  const ready = missing.length === 0
 
   return (
     <div style={{ ...panel, marginBottom: 12, background: '#FFFDF5', border: `1px solid ${X.yellow}` }}>
@@ -103,6 +111,17 @@ function AddUserCard({ groups, stores, onDone, onCancel }) {
           </select>
         )}
       </div>
+      {groupHasNoRooftops && (
+        <div style={{ marginTop: 10, fontSize: 12.5, color: X.red }}>
+          This group has no rooftops yet, so a dealership user can't be placed in it.
+          Add the rooftop under Dealer Network first, or pick a different group.
+        </div>
+      )}
+      {!ready && !groupHasNoRooftops && (
+        <div style={{ marginTop: 10, fontSize: 12.5, color: X.slate }}>
+          Still needed: {missing.join(', ')}.
+        </div>
+      )}
       {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.startsWith('Created') ? X.green : X.red }}>{msg}</div>}
       <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
         <button style={{ ...btnPrimary, opacity: ready && !busy ? 1 : 0.5 }} disabled={!ready || busy} onClick={submit}>
