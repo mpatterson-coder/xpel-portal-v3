@@ -100,8 +100,13 @@ create table orders (
   dealership_id  uuid not null references dealerships(id),
   created_by     uuid not null references profiles(id),
   status         order_status not null default 'submitted',
-  customer_name  text,
+  customer_name  text,   -- combined "First Last" copy (what every screen displays)
+  customer_first_name text,
+  customer_last_name  text,
   customer_phone text,
+  customer_email text,
+  -- Date the vehicle is available for pick-up (chosen by the F&I user).
+  pickup_date    date,
   -- Structured vehicle info. DPV1 decodes make/year from the VIN, then the
   -- F&I user confirms model, trim, and the coverage size tier.
   vin            text,

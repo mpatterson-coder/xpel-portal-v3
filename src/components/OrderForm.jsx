@@ -2,25 +2,48 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getCatalog, createOrder } from '../lib/db'
 import { decodeVinFull, isLikelyVin } from '../lib/vin'
+import { usePersistentState } from '../lib/uiState'
 import { COLOR as X, FONT, money } from '../lib/theme'
 
 const SIZES = ['standard', 'midsize', 'fullsize']
+const EMPTY_VEH = { year: '', make: '', model: '', trim: '', size: '' }
+const EMPTY_CUST = { first: '', last: '', phone: '', email: '', pickup: '' }
+
+// Today's date as YYYY-MM-DD in the user's LOCAL timezone (used to stop the
+// calendar from offering past dates; toISOString() would use UTC and can be
+// a day off in US timezones).
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 // V3 ordering flow. IMPORTANT DESIGN PRINCIPLE: nothing here is hardcoded to
 // any product, package, category, or tier. The screen groups whatever is in
 // the live catalog by its category field, so anything an admin creates in
 // Catalog & Pricing — new categories included — appears here automatically.
+//
+// The in-progress order (VIN, decoded vehicle, customer details, cart) is a
+// PERSISTENT DRAFT: it survives switching browser tabs and even a full page
+// reload, and is cleared only when the order is submitted. Keys are scoped to
+// the signed-in user so one person's draft never appears for another.
 export default function OrderForm({ onCreated }) {
   const { profile } = useAuth()
   const [catalog, setCatalog] = useState([])
   const [loadErr, setLoadErr] = useState('')
 
-  const [vin, setVin] = useState('')
-  const [veh, setVeh] = useState({ year: '', make: '', model: '', trim: '', size: '' })
-  const [decoded, setDecoded] = useState(false)
-  const [cust, setCust] = useState({ name: '', phone: '' })
-  const [lines, setLines] = useState([])
-  const [showMargin, setShowMargin] = useState(false)
+  const uid = profile?.id || 'anon'
+  const [vin, setVin] = usePersistentState(`xpel.${uid}.order.vin`, '')
+  const [vehRaw, setVeh] = usePersistentState(`xpel.${uid}.order.veh`, EMPTY_VEH)
+  const [decoded, setDecoded] = usePersistentState(`xpel.${uid}.order.decoded`, false)
+  const [decodeNote, setDecodeNote] = usePersistentState(`xpel.${uid}.order.note`, '')
+  const [custRaw, setCust] = usePersistentState(`xpel.${uid}.order.cust`, EMPTY_CUST)
+  const [lines, setLines] = usePersistentState(`xpel.${uid}.order.lines`, [])
+  // Merge over the defaults so a draft saved by an older version of the app
+  // can never be missing a field.
+  const veh = { ...EMPTY_VEH, ...vehRaw }
+  const cust = { ...EMPTY_CUST, ...custRaw }
+
+  const [showMargin, setShowMargin] = useState(false) // deliberately NOT persisted: always reopens hidden (safe for customer presentation)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -38,7 +61,6 @@ export default function OrderForm({ onCreated }) {
   }, [catalog])
 
   const [decoding, setDecoding] = useState(false)
-  const [decodeNote, setDecodeNote] = useState('')
 
   async function handleDecode() {
     setDecoding(true); setDecodeNote('')
@@ -78,15 +100,21 @@ export default function OrderForm({ onCreated }) {
     return { revenue, cost, margin: revenue - cost, marginPct: revenue ? Math.round(((revenue - cost) / revenue) * 100) : 0 }
   }, [lines])
 
-  const canSubmit = lines.length > 0 && cust.name.trim() && veh.size && !busy
+  const canSubmit = lines.length > 0 && cust.first.trim() && cust.last.trim() && veh.size && !busy
 
   async function submit() {
     setBusy(true); setMsg('')
     try {
+      const first = cust.first.trim()
+      const last = cust.last.trim()
       const order = await createOrder(profile, {
         lines: lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity, unit_price: l.product.effective_price })),
-        customer_name: cust.name.trim(),
+        customer_first_name: first,
+        customer_last_name: last,
+        customer_name: `${first} ${last}`.trim(), // combined copy, so every existing screen keeps displaying names
         customer_phone: cust.phone.trim() || null,
+        customer_email: cust.email.trim() || null,
+        pickup_date: cust.pickup || null,
         vin: vin.trim() || null,
         vehicle_year: veh.year ? Number(veh.year) : null,
         vehicle_make: veh.make.trim() || null,
@@ -95,8 +123,9 @@ export default function OrderForm({ onCreated }) {
         vehicle_size: veh.size,
       })
       setMsg(`Order ${order.order_number} submitted.`)
-      setVin(''); setVeh({ year: '', make: '', model: '', trim: '', size: '' }); setDecoded(false)
-      setCust({ name: '', phone: '' }); setLines([])
+      // Clear the draft (persistence saves the cleared values, so nothing lingers).
+      setVin(''); setVeh(EMPTY_VEH); setDecoded(false); setDecodeNote('')
+      setCust(EMPTY_CUST); setLines([])
       onCreated?.()
     } catch (e) { setMsg(e.message) } finally { setBusy(false) }
   }
@@ -116,7 +145,7 @@ export default function OrderForm({ onCreated }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
             {['year', 'make', 'model', 'trim'].map((k) => (
               <div key={k}>
-                <div style={{ fontSize: 10.5, color: X.slate, marginBottom: 4, textTransform: 'capitalize' }}>{k}</div>
+                <div style={{ ...fieldLbl, textTransform: 'capitalize' }}>{k}</div>
                 <input value={veh[k]} onChange={(e) => setVeh({ ...veh, [k]: e.target.value })} style={input} />
               </div>
             ))}
@@ -130,14 +159,27 @@ export default function OrderForm({ onCreated }) {
         </>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 16 }}>
-        {[['Customer name', cust.name, (v) => setCust({ ...cust, name: v })],
-          ['Phone', cust.phone, (v) => setCust({ ...cust, phone: v })]].map(([lbl, val, set]) => (
-          <div key={lbl}>
-            <div style={{ fontSize: 10.5, color: X.slate, marginBottom: 4 }}>{lbl}</div>
-            <input value={val} onChange={(e) => set(e.target.value)} style={input} />
+      <Label>Customer</Label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {[['First Name', 'first', 'text'],
+          ['Last Name', 'last', 'text'],
+          ['Phone', 'phone', 'tel'],
+          ['Email', 'email', 'email']].map(([lbl, key, type]) => (
+          <div key={key}>
+            <div style={fieldLbl}>{lbl}</div>
+            <input type={type} value={cust[key]} onChange={(e) => setCust({ ...cust, [key]: e.target.value })} style={input} />
           </div>
         ))}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div style={fieldLbl}>Date Vehicle Available for Pick-Up</div>
+          <input
+            type="date"
+            min={todayStr()}
+            value={cust.pickup}
+            onChange={(e) => setCust({ ...cust, pickup: e.target.value })}
+            style={{ ...input, maxWidth: 240 }}
+          />
+        </div>
       </div>
 
       {loadErr && <div style={{ color: X.red, fontSize: 13, marginTop: 12 }}>{loadErr}</div>}
@@ -210,6 +252,7 @@ const Label = ({ children, noTop }) => (
 
 const card = { background: X.panel, border: `1px solid ${X.line}`, borderRadius: 12, padding: 24, maxWidth: 780, fontFamily: FONT.body }
 const input = { width: '100%', boxSizing: 'border-box', border: `1px solid ${X.gray}`, borderRadius: 8, padding: '10px 11px', fontSize: 14, fontFamily: FONT.body }
+const fieldLbl = { fontSize: 10.5, color: X.slate, marginBottom: 4 }
 const pill = { flex: 1, textTransform: 'capitalize', border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 8, padding: '10px', cursor: 'pointer', fontFamily: FONT.body, fontWeight: 500 }
 const pillOn = { background: X.black, color: '#fff', borderColor: X.black }
 const catItemOn = { borderColor: '#FDB521', borderWidth: 2, background: '#FFFBEF', boxShadow: '0 0 0 1px #FDB52133' }

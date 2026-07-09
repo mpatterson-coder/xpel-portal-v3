@@ -5,6 +5,7 @@ import UsersAdmin from './UsersAdmin'
 import NetworkAdmin from './NetworkAdmin'
 import CatalogAdmin from './CatalogAdmin'
 import OrdersList from './OrdersList'
+import { usePersistentState } from '../lib/uiState'
 import { COLOR as X, FONT, money as fm } from '../lib/theme'
 
 const money = (n) => fm(n, 0)
@@ -15,8 +16,8 @@ const TABS = { overview: 'Overview', orders: 'Orders', users: 'Users', network: 
 // navigate to the data they represent (Orders view with a preset filter, the
 // Network tab, etc.).
 export default function AdminDashboard() {
-  const [tab, setTab] = useState('overview')
-  const [orderFilter, setOrderFilter] = useState('all')
+  const [tab, setTab] = usePersistentState('xpel.admin.tab', 'overview')
+  const [orderFilter, setOrderFilter] = usePersistentState('xpel.admin.orderFilter', 'all')
 
   const go = (nextTab, filter) => {
     if (filter) setOrderFilter(filter)

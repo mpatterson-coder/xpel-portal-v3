@@ -1,3 +1,5 @@
+import { dateUS } from '../lib/theme'
+
 const X = { yellow: '#FDB521', black: '#000', teal: '#1A9392', slate: '#505A72', red: '#C94543', gray: '#D1D3D5', green: '#2E7D5B' }
 const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -21,6 +23,7 @@ export default function OrdersList({ orders, title = 'Orders' }) {
             <div style={{ fontSize: 12, color: X.slate }}>
               {[o.vehicle_year, o.vehicle_make, o.vehicle_model, o.vehicle_trim].filter(Boolean).join(' ') || 'Vehicle not entered'}
               {o.vehicle_size ? ` · ${o.vehicle_size}` : ''}
+              {o.pickup_date ? ` · Avail ${dateUS(o.pickup_date)}` : ''}
             </div>
           </div>
           <div style={{ width: 90, textAlign: 'right', fontWeight: 700 }}>{money(o.total_amount)}</div>

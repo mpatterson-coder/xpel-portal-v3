@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder } from '../lib/db'
+import { usePersistentState } from '../lib/uiState'
+import { dateUS } from '../lib/theme'
 
 const X = { yellow: '#FDB521', black: '#000', teal: '#1A9392', slate: '#505A72', red: '#C94543', gray: '#D1D3D5', green: '#2E7D5B' }
 const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -15,7 +17,7 @@ const FILTERS = { active: 'Active', completed: 'Completed', all: 'All' }
 // order number, which is flagged when missing (matches DPV1).
 export default function InstallerDashboard() {
   const [orders, setOrders] = useState([])
-  const [filter, setFilter] = useState('active')
+  const [filter, setFilter] = usePersistentState('xpel.installer.filter', 'active')
   const [err, setErr] = useState('')
 
   const load = () => getOrders().then(setOrders).catch((e) => setErr(e.message))
@@ -83,6 +85,11 @@ function QueueRow({ order, onChanged }) {
             {order.vehicle_size ? ` · ${order.vehicle_size}` : ''}
           </div>
         </div>
+        {order.pickup_date && (
+          <span style={{ ...flag, color: X.black, background: '#FFF3D6', border: `1px solid ${X.yellow}` }}>
+            Avail&nbsp;{dateUS(order.pickup_date)}
+          </span>
+        )}
         {missingDap
           ? <span style={{ ...flag, color: '#fff', background: X.red }}>DAP&nbsp;#&nbsp;Missing</span>
           : <span style={{ ...flag, color: X.slate, border: `1px solid ${X.gray}` }}>DAP&nbsp;{order.dap_work_order}</span>}
@@ -100,6 +107,18 @@ function QueueRow({ order, onChanged }) {
           {detail?.error && <div style={{ color: X.red, fontSize: 13 }}>{detail.error}</div>}
           {detail && !detail.error && (
             <>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }}>Customer</div>
+              <div style={{ fontSize: 14, marginBottom: 14 }}>
+                <div style={{ fontWeight: 600 }}>{order.customer_name || '—'}</div>
+                {(order.customer_phone || order.customer_email) && (
+                  <div style={{ fontSize: 13, color: X.slate }}>
+                    {[order.customer_phone, order.customer_email].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+                {order.pickup_date && (
+                  <div style={{ fontSize: 13, color: X.slate }}>Vehicle available for pick-up: {dateUS(order.pickup_date)}</div>
+                )}
+              </div>
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }}>DAP work order #</div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 340 }}>
                 <input value={dapDraft} onChange={(e) => setDapDraft(e.target.value)} placeholder="Enter DAP work order number"

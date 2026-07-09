@@ -13,15 +13,27 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   // Track the auth session.
+  //
+  // IMPORTANT (fixes the "portal resets to home when I switch browser tabs"
+  // bug): Supabase quietly re-validates the login every time the tab regains
+  // focus, and fires this listener again even though the SAME person is still
+  // signed in. If we replaced our session state each time, the app would
+  // briefly flash "Loading…", every screen would unmount, and the user would
+  // land back on the home view. So we only accept a new session object when
+  // the signed-in USER actually changes (sign in, sign out, user switch) —
+  // silent token refreshes are ignored.
   useEffect(() => {
     let active = true
+    const keepIfSameUser = (prev, next) =>
+      prev?.user?.id && next?.user?.id === prev.user.id ? prev : next
+
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return
-      setSession(data.session)
+      setSession((prev) => keepIfSameUser(prev, data.session))
       if (!data.session) setLoading(false)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s)
+      setSession((prev) => keepIfSameUser(prev, s))
       if (!s) {
         setProfile(null)
         setLoading(false)
@@ -33,15 +45,17 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  // Whenever we have a session, load that user's profile (role + tenancy).
+  // Load the profile when the signed-in USER changes — keyed to the user id,
+  // not the session object, so token refreshes never re-trigger it.
+  const userId = session?.user?.id ?? null
   useEffect(() => {
-    if (!session?.user) return
+    if (!userId) return
     let active = true
     setLoading(true)
     supabase
       .from('profiles')
       .select('id, full_name, role, group_id, dealership_id')
-      .eq('id', session.user.id)
+      .eq('id', userId)
       .single()
       .then(({ data, error }) => {
         if (!active) return
@@ -52,7 +66,7 @@ export function AuthProvider({ children }) {
     return () => {
       active = false
     }
-  }, [session])
+  }, [userId])
 
   const value = {
     session,

@@ -80,7 +80,8 @@ export async function getOrderDetail(orderId) {
 // which supplies the group_id / dealership_id the RLS insert policy checks.
 // `lines` is an array of { product_id, quantity, unit_price }.
 export async function createOrder(profile, {
-  lines, customer_name, customer_phone,
+  lines, customer_name, customer_first_name, customer_last_name,
+  customer_phone, customer_email, pickup_date,
   vin, vehicle_year, vehicle_make, vehicle_model, vehicle_trim, vehicle_size,
   dap_work_order, notes,
 }) {
@@ -96,7 +97,11 @@ export async function createOrder(profile, {
       dealership_id: profile.dealership_id,
       created_by: profile.id,
       customer_name,
+      customer_first_name,
+      customer_last_name,
       customer_phone,
+      customer_email,
+      pickup_date,
       vin,
       vehicle_year,
       vehicle_make,

@@ -34,3 +34,12 @@ export const FONT = {
 
 export const money = (n, frac = 2) =>
   '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: frac, maximumFractionDigits: frac })
+
+// Format a date-only value like '2026-07-15' as '7/15/2026' WITHOUT letting
+// the browser shift it by timezone. (new Date('2026-07-15') is parsed as UTC
+// midnight and can display as the PREVIOUS day in US timezones.)
+export const dateUS = (d) => {
+  if (!d) return ''
+  const [y, m, day] = String(d).slice(0, 10).split('-')
+  return `${Number(m)}/${Number(day)}/${y}`
+}
