@@ -22,6 +22,14 @@ export default function Login() {
       <form onSubmit={submit} style={s.card}>
         <img src={logoWhite} alt="XPEL" style={{ width: 190, alignSelf: 'flex-start' }} />
         <div style={s.subtitle}>Dealership Portal</div>
+        {/* Signature element from the 2026 visual system: the forward-leaning
+            shape cluster (Brand Guidelines V1 2026 — Graphic Elements &
+            stationery, pp.34/47). Angle echoes the logo's lean. */}
+        <div style={s.motif} aria-hidden="true">
+          <div style={{ ...s.chip, background: COLOR.yellow }} />
+          <div style={{ ...s.chip, background: COLOR.slate }} />
+          <div style={{ ...s.chip, background: COLOR.stone }} />
+        </div>
         <label style={s.label}>Email</label>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" style={s.input} required />
         <label style={s.label}>Password</label>
@@ -36,13 +44,18 @@ export default function Login() {
   )
 }
 
+// Dark neutrals are derived from Carbon Black (#141213) — lifted a step for
+// the card and another for borders — so the whole screen sits in the 2026
+// primary palette with XPEL Yellow as the only accent.
 const s = {
   screen: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLOR.black, fontFamily: FONT.body, padding: 24 },
-  card: { width: '100%', maxWidth: 400, background: '#0B0B0C', border: `1px solid #2A2F3A`, borderRadius: 12, padding: '40px 34px', display: 'flex', flexDirection: 'column' },
-  subtitle: { color: COLOR.yellow, fontWeight: FONT.subWeight, fontSize: 13, textTransform: 'uppercase', letterSpacing: FONT.subtitleSpacing, marginTop: 12, marginBottom: 26 },
+  card: { width: '100%', maxWidth: 400, background: '#1C1B1A', border: `1px solid #35332F`, borderRadius: 12, padding: '40px 34px', display: 'flex', flexDirection: 'column' },
+  subtitle: { color: COLOR.yellow, fontWeight: FONT.subWeight, fontSize: 13, textTransform: 'uppercase', letterSpacing: FONT.subtitleSpacing, marginTop: 12 },
+  motif: { display: 'flex', gap: 5, marginTop: 16, marginBottom: 10 },
+  chip: { width: 15, height: 15, transform: 'skewX(-14deg)' },
   label: { color: COLOR.gray, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginBottom: 6, marginTop: 14 },
-  input: { background: '#000', border: `1px solid #2A2F3A`, borderRadius: 8, padding: '12px 13px', color: '#fff', fontSize: 15, fontFamily: FONT.body, outline: 'none' },
+  input: { background: COLOR.black, border: `1px solid #35332F`, borderRadius: 8, padding: '12px 13px', color: COLOR.white, fontSize: 15, fontFamily: FONT.body, outline: 'none' },
   button: { marginTop: 28, background: COLOR.yellow, color: COLOR.black, border: 'none', borderRadius: 8, padding: '14px 16px', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontFamily: FONT.body, cursor: 'pointer' },
-  error: { marginTop: 16, color: COLOR.red, fontSize: 13.5 },
-  foot: { marginTop: 22, color: COLOR.slate, fontSize: 11.5, textAlign: 'center', letterSpacing: '0.03em' },
+  error: { marginTop: 16, color: '#E4837F', fontSize: 13.5 },
+  foot: { marginTop: 22, color: '#8C8983', fontSize: 11.5, textAlign: 'center', letterSpacing: '0.03em' },
 }

@@ -89,7 +89,7 @@ function OverviewTab({ onNavigate }) {
       <Panel title="Sales performance by group">
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={view.rows} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-            <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: 'Jost' }} />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: 'Arial' }} />
             <YAxis tickFormatter={(v) => money(v)} tick={{ fontSize: 11 }} width={70} />
             <Tooltip formatter={(v) => money(v)} />
             <Bar dataKey="revenue" radius={[4, 4, 0, 0]} cursor="pointer" onClick={() => onNavigate('orders', 'all')}>
@@ -104,10 +104,10 @@ function OverviewTab({ onNavigate }) {
           <tbody>
             {view.rows.map((r) => (
               <tr key={r.name} onClick={() => onNavigate('orders', 'all')} style={{ cursor: 'pointer' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#FAFBFC'}
+                  onMouseEnter={(e) => e.currentTarget.style.background = X.bg}
                   onMouseLeave={(e) => e.currentTarget.style.background = ''}>
                 <Td>{r.name}</Td><Td r>{r.rooftops}</Td><Td r>{r.orders}</Td>
-                <Td r>{money(r.revenue)}</Td><Td r style={{ color: X.teal }}>{money(r.margin)}</Td><Td r>{r.marginPct}%</Td>
+                <Td r>{money(r.revenue)}</Td><Td r style={{ color: X.green }}>{money(r.margin)}</Td><Td r>{r.marginPct}%</Td>
               </tr>
             ))}
           </tbody>
@@ -174,6 +174,6 @@ const Panel = ({ title, children }) => (
 const Th = ({ children, r }) => <th style={{ textAlign: r ? 'right' : 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: X.slate, padding: '8px 6px', borderBottom: `1px solid ${X.gray}` }}>{children}</th>
 const Td = ({ children, r, style }) => <td style={{ textAlign: r ? 'right' : 'left', fontSize: 14, padding: '8px 6px', borderBottom: `1px solid ${X.line}`, ...style }}>{children}</td>
 const tbl = { width: '100%', borderCollapse: 'collapse', marginTop: 12 }
-const opCard = { flex: '1 1 120px', background: '#FAFBFC', border: `1px solid ${X.line}`, borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', fontFamily: FONT.body }
+const opCard = { flex: '1 1 120px', background: X.bg, border: `1px solid ${X.line}`, borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', fontFamily: FONT.body }
 const chip = { border: `1px solid ${X.gray}`, background: '#fff', color: X.slate, borderRadius: 8, padding: '7px 13px', fontSize: 12, fontWeight: 600, textTransform: 'capitalize', cursor: 'pointer', fontFamily: FONT.body }
 const chipOn = { background: X.black, color: '#fff', borderColor: X.black }

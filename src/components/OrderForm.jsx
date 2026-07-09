@@ -141,7 +141,7 @@ export default function OrderForm({ onCreated }) {
       </div>
       {decoded && (
         <>
-          <div style={{ fontSize: 12.5, color: X.teal, margin: '8px 0 4px' }}>{decodeNote}</div>
+          <div style={{ fontSize: 12.5, color: X.strata, margin: '8px 0 4px' }}>{decodeNote}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
             {['year', 'make', 'model', 'trim'].map((k) => (
               <div key={k}>
@@ -223,7 +223,7 @@ export default function OrderForm({ onCreated }) {
               <div style={{ flex: 1, fontSize: 14 }}>{l.product.name}</div>
               <input type="number" min="1" value={l.quantity} onChange={(e) => setQty(l.product.id, Number(e.target.value))} style={{ ...input, width: 56, padding: '6px 8px' }} />
               <div style={{ width: 90, textAlign: 'right' }}>{money(l.product.effective_price * l.quantity)}</div>
-              {showMargin && <div style={{ width: 90, textAlign: 'right', color: X.teal, fontSize: 13 }}>+{money((l.product.effective_price - l.product.cost) * l.quantity)}</div>}
+              {showMargin && <div style={{ width: 90, textAlign: 'right', color: X.green, fontSize: 13 }}>+{money((l.product.effective_price - l.product.cost) * l.quantity)}</div>}
               <button onClick={() => removeLine(l.product.id)} style={xBtn}>×</button>
             </div>
           ))}
@@ -231,14 +231,14 @@ export default function OrderForm({ onCreated }) {
             <span>Total</span><span>{money(totals.revenue)}</span>
           </div>
           {showMargin && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: X.teal, fontSize: 13 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: X.green, fontSize: 13 }}>
               <span>Margin ({totals.marginPct}% of revenue)</span><span>{money(totals.margin)}</span>
             </div>
           )}
         </div>
       )}
 
-      {msg && <div style={{ marginTop: 12, color: msg.includes('submitted') ? X.teal : X.red, fontSize: 14 }}>{msg}</div>}
+      {msg && <div style={{ marginTop: 12, color: msg.includes('submitted') ? X.green : X.red, fontSize: 14 }}>{msg}</div>}
       <button onClick={submit} disabled={!canSubmit} style={{ ...btnPrimary, opacity: canSubmit ? 1 : 0.5, marginTop: 16 }}>
         {busy ? 'Submitting…' : 'Submit Order'}
       </button>

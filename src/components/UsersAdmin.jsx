@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getGroups, getDealerships } from '../lib/db'
 import { getAllProfiles, adminCreateUser, updateProfileAssignment } from '../lib/adminDb'
 
-const X = { yellow: '#FDB521', black: '#000', teal: '#1A9392', slate: '#505A72', red: '#C94543', gray: '#D1D3D5' }
+import { COLOR as X, FONT } from '../lib/theme'
 const ROLES = ['dealership', 'installer', 'admin']
 
 export default function UsersAdmin() {
@@ -103,7 +103,7 @@ function AddUserCard({ groups, stores, onDone, onCancel }) {
           </select>
         )}
       </div>
-      {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.startsWith('Created') ? X.teal : X.red }}>{msg}</div>}
+      {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.startsWith('Created') ? X.green : X.red }}>{msg}</div>}
       <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
         <button style={{ ...btnPrimary, opacity: ready && !busy ? 1 : 0.5 }} disabled={!ready || busy} onClick={submit}>
           {busy ? 'Creating…' : 'Create User'}
@@ -169,12 +169,12 @@ function EditRow({ profile, groups, stores, onDone, onCancel }) {
 }
 
 function RoleTag({ role }) {
-  const bg = role === 'admin' ? X.black : role === 'installer' ? X.teal : X.yellow
+  const bg = role === 'admin' ? X.black : role === 'installer' ? X.strata : X.yellow
   const fg = role === 'installer' || role === 'admin' ? '#fff' : X.black
-  return <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, background: bg, color: fg, borderRadius: 4, padding: '3px 8px', width: 92, textAlign: 'center' }}>{role}</span>
+  return <span style={{ fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, background: bg, color: fg, borderRadius: 4, padding: '3px 8px', width: 92, textAlign: 'center' }}>{role}</span>
 }
 
 const panel = { background: '#fff', border: `1px solid ${X.gray}`, borderRadius: 10, padding: 16 }
-const input = { border: `1px solid ${X.gray}`, borderRadius: 6, padding: '9px 10px', fontSize: 14, fontFamily: "'Jost', sans-serif", background: '#fff' }
-const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '9px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
-const btnGhost = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 6, padding: '9px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
+const input = { border: `1px solid ${X.gray}`, borderRadius: 6, padding: '9px 10px', fontSize: 14, fontFamily: FONT.body, background: '#fff' }
+const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '9px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: FONT.body }
+const btnGhost = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 6, padding: '9px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }

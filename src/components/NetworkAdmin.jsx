@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getGroups, getDealerships } from '../lib/db'
 import { createGroup, renameGroup, createDealership, updateDealership, deleteDealership } from '../lib/adminDb'
 
-const X = { yellow: '#FDB521', black: '#000', teal: '#1A9392', slate: '#505A72', red: '#C94543', gray: '#D1D3D5' }
+import { COLOR as X, FONT } from '../lib/theme'
 
 export default function NetworkAdmin() {
   const [groups, setGroups] = useState([])
@@ -126,7 +126,7 @@ function StoreRow({ store, onChanged, onError }) {
 }
 
 const panel = { background: '#fff', border: `1px solid ${X.gray}`, borderRadius: 10, padding: 16 }
-const input = { border: `1px solid ${X.gray}`, borderRadius: 6, padding: '8px 10px', fontSize: 14, fontFamily: "'Jost', sans-serif", background: '#fff' }
-const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
-const btnGhostTop = { background: '#fff', color: '#505A72', border: '1px solid #D1D3D5', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
-const btnGhost = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 6, padding: '8px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
+const input = { border: `1px solid ${X.gray}`, borderRadius: 6, padding: '8px 10px', fontSize: 14, fontFamily: FONT.body, background: '#fff' }
+const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: FONT.body }
+const btnGhostTop = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: FONT.body }
+const btnGhost = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 6, padding: '8px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }

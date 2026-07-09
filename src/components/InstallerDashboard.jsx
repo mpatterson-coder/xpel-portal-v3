@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react'
 import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder } from '../lib/db'
 import { usePersistentState } from '../lib/uiState'
-import { dateUS } from '../lib/theme'
+import { COLOR as X, FONT, STATUS_TONE, money, dateUS } from '../lib/theme'
 
-const X = { yellow: '#FDB521', black: '#000', teal: '#1A9392', slate: '#505A72', red: '#C94543', gray: '#D1D3D5', green: '#2E7D5B' }
-const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-const TONE = { submitted: X.slate, in_review: X.teal, approved: X.teal, in_progress: X.yellow, completed: X.green, cancelled: X.red }
 // The forward fulfillment path an installer walks an order through.
 const NEXT = { submitted: 'in_review', in_review: 'approved', approved: 'in_progress', in_progress: 'completed' }
 const FILTERS = { active: 'Active', completed: 'Completed', all: 'All' }
@@ -77,7 +73,7 @@ function QueueRow({ order, onChanged }) {
   return (
     <div style={{ borderBottom: `1px solid ${X.gray}`, padding: '10px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 12, color: X.slate, width: 92 }}>{order.order_number}</div>
+        <div style={{ fontFamily: FONT.body, fontSize: 12, color: X.slate, width: 92 }}>{order.order_number}</div>
         <div style={{ flex: 1, cursor: 'pointer' }} onClick={toggle}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{order.customer_name || '—'}</div>
           <div style={{ fontSize: 12, color: X.slate }}>
@@ -102,7 +98,7 @@ function QueueRow({ order, onChanged }) {
       </div>
 
       {open && (
-        <div style={{ marginTop: 10, padding: 12, background: '#FAFBFC', borderRadius: 8 }}>
+        <div style={{ marginTop: 10, padding: 12, background: X.bg, borderRadius: 8 }}>
           {!detail && <div style={{ color: X.slate, fontSize: 13 }}>Loading…</div>}
           {detail?.error && <div style={{ color: X.red, fontSize: 13 }}>{detail.error}</div>}
           {detail && !detail.error && (
@@ -122,7 +118,7 @@ function QueueRow({ order, onChanged }) {
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }}>DAP work order #</div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 340 }}>
                 <input value={dapDraft} onChange={(e) => setDapDraft(e.target.value)} placeholder="Enter DAP work order number"
-                  style={{ flex: 1, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '8px 10px', fontSize: 14, fontFamily: "'Jost', sans-serif" }} />
+                  style={{ flex: 1, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '8px 10px', fontSize: 14, fontFamily: FONT.body }} />
                 <button disabled={busy || (dapDraft.trim() === (order.dap_work_order || ''))} onClick={saveDap}
                   style={{ ...advBtn, opacity: busy || (dapDraft.trim() === (order.dap_work_order || '')) ? 0.5 : 1 }}>Save</button>
               </div>
@@ -134,7 +130,7 @@ function QueueRow({ order, onChanged }) {
               ))}
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, margin: '12px 0 6px' }}>Status history</div>
               {detail.history.map((h) => (
-                <div key={h.id} style={{ fontSize: 12, color: X.slate, fontFamily: "'Jost', sans-serif" }}>
+                <div key={h.id} style={{ fontSize: 12, color: X.slate, fontFamily: FONT.body }}>
                   {new Date(h.created_at).toLocaleString()} — {h.status.replace('_', ' ')}
                 </div>
               ))}
@@ -150,11 +146,12 @@ function QueueRow({ order, onChanged }) {
 }
 
 function Badge({ status }) {
-  return <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: status === 'in_progress' ? X.black : '#fff', background: TONE[status] || X.slate, borderRadius: 4, padding: '3px 8px', width: 92, textAlign: 'center' }}>{(status || '').replace('_', ' ')}</span>
+  const t = STATUS_TONE[status] || STATUS_TONE.submitted
+  return <span style={{ fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: t.fg, background: t.bg, borderRadius: 4, padding: '3px 8px', width: 92, textAlign: 'center' }}>{(status || '').replace('_', ' ')}</span>
 }
 
-const tab = { border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
+const tab = { border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
 const tabOn = { background: X.black, color: '#fff', borderColor: X.black }
-const flag = { fontFamily: "'Jost', sans-serif", fontSize: 11, borderRadius: 4, padding: '3px 8px' }
-const advBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '7px 12px', fontWeight: 700, fontSize: 12, textTransform: 'capitalize', cursor: 'pointer', fontFamily: "'Jost', sans-serif" }
+const flag = { fontFamily: FONT.body, fontSize: 11, borderRadius: 4, padding: '3px 8px' }
+const advBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '7px 12px', fontWeight: 700, fontSize: 12, textTransform: 'capitalize', cursor: 'pointer', fontFamily: FONT.body }
 const cancelLink = { marginTop: 12, background: 'transparent', border: 'none', color: X.red, fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }

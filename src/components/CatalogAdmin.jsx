@@ -43,10 +43,10 @@ export default function CatalogAdmin() {
                 <div style={{ fontSize: 11.5, color: X.slate }}>{p.category}{p.tier ? ` · ${p.tier}` : ''} · {p.sku}</div>
               </div>
               <div style={{ width: 90, textAlign: 'right', fontWeight: 700 }}>{money(p.unit_price)}</div>
-              <div style={{ width: 70, textAlign: 'right', color: X.teal, fontSize: 13 }}>
+              <div style={{ width: 70, textAlign: 'right', color: X.green, fontSize: 13 }}>
                 {Number(p.unit_price) ? Math.round(((p.unit_price - p.cost) / p.unit_price) * 100) : 0}%
               </div>
-              <span style={{ ...badge, background: p.active ? X.teal : X.gray, color: p.active ? '#fff' : X.slate }}>
+              <span style={{ ...badge, background: p.active ? X.green : X.gray, color: p.active ? '#fff' : X.slate }}>
                 {p.active ? 'Active' : 'Retired'}
               </span>
               <span style={{ color: X.slate, fontSize: 12 }}>{openId === p.id ? '▲' : '▼'}</span>
