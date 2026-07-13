@@ -42,6 +42,17 @@ create table dealership_groups (
   created_at  timestamptz not null default now()
 );
 
+-- XPEL Authorized Dealers: the installer BUSINESSES in the network. A dealer
+-- services one or more rooftops (possibly across groups); installer users
+-- belong to a dealer and see exactly those rooftops' orders.
+create table authorized_dealers (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  city        text,
+  state       text,
+  created_at  timestamptz not null default now()
+);
+
 -- Individual store locations inside a group.
 create table dealerships (
   id          uuid primary key default gen_random_uuid(),
@@ -49,6 +60,8 @@ create table dealerships (
   name        text not null,
   city        text,
   state       text,
+  -- Which XPEL Authorized Dealer services this rooftop (assigned by admin).
+  authorized_dealer_id uuid references authorized_dealers(id) on delete set null,
   created_at  timestamptz not null default now()
 );
 
@@ -61,6 +74,8 @@ create table profiles (
   role           user_role not null default 'dealership',
   group_id       uuid references dealership_groups(id) on delete set null,
   dealership_id  uuid references dealerships(id) on delete set null,
+  -- For installer users: the XPEL Authorized Dealer they work for.
+  authorized_dealer_id uuid references authorized_dealers(id) on delete set null,
   created_at     timestamptz not null default now()
 );
 
@@ -155,6 +170,8 @@ create table notifications (
 create index on dealerships (group_id);
 create index on profiles (group_id);
 create index on profiles (dealership_id);
+create index on profiles (authorized_dealer_id);
+create index on dealerships (authorized_dealer_id);
 create index on group_pricing (group_id);
 create index on orders (group_id);
 create index on orders (dealership_id);
@@ -184,6 +201,11 @@ $$;
 create or replace function public.current_user_dealership_id()
 returns uuid language sql stable security definer set search_path = public as $$
   select dealership_id from profiles where id = auth.uid()
+$$;
+
+create or replace function public.current_user_dealer_id()
+returns uuid language sql stable security definer set search_path = public as $$
+  select authorized_dealer_id from profiles where id = auth.uid()
 $$;
 
 create or replace function public.is_admin()
@@ -224,9 +246,10 @@ begin
   if auth.uid() is null or public.is_admin() then
     return new;
   end if;
-  new.role          := old.role;
-  new.group_id      := old.group_id;
-  new.dealership_id := old.dealership_id;
+  new.role                 := old.role;
+  new.group_id             := old.group_id;
+  new.dealership_id        := old.dealership_id;
+  new.authorized_dealer_id := old.authorized_dealer_id;
   return new;
 end $$;
 
@@ -269,6 +292,7 @@ create trigger orders_log_status
 -- With RLS on and no policy, access is DENIED by default — so we are explicit.
 
 alter table dealership_groups   enable row level security;
+alter table authorized_dealers  enable row level security;
 alter table dealerships         enable row level security;
 alter table profiles            enable row level security;
 alter table products            enable row level security;
@@ -286,6 +310,7 @@ create policy profiles_select on profiles for select using (
   id = auth.uid()
   or public.is_admin()
   or (group_id is not null and group_id = public.current_user_group_id())
+  or (authorized_dealer_id is not null and authorized_dealer_id = public.current_user_dealer_id())
 );
 -- Update your own profile (privileged columns are protected by trigger 3b);
 -- admins can update anyone.
@@ -305,9 +330,21 @@ create policy groups_admin_write on dealership_groups for all
   using (public.is_admin()) with check (public.is_admin());
 
 
+-- ---- authorized_dealers ------------------------------------------------------
+create policy dealers_select on authorized_dealers for select using (
+  public.is_admin()
+  or id = public.current_user_dealer_id()
+  or id = (select authorized_dealer_id from dealerships where id = public.current_user_dealership_id())
+);
+create policy dealers_admin_write on authorized_dealers for all
+  using (public.is_admin()) with check (public.is_admin());
+
+
 -- ---- dealerships ------------------------------------------------------------
 create policy dealerships_select on dealerships for select using (
-  public.is_admin() or group_id = public.current_user_group_id()
+  public.is_admin()
+  or group_id = public.current_user_group_id()
+  or (authorized_dealer_id is not null and authorized_dealer_id = public.current_user_dealer_id())
 );
 create policy dealerships_admin_write on dealerships for all
   using (public.is_admin()) with check (public.is_admin());
@@ -335,7 +372,11 @@ create policy pricing_admin_write on group_pricing for all
 --   dealership  -> only orders for their own location
 create policy orders_select on orders for select using (
   public.is_admin()
-  or (public.current_user_role() = 'installer'  and group_id      = public.current_user_group_id())
+  or (public.current_user_role() = 'installer' and exists (
+        select 1 from dealerships d
+        where d.id = orders.dealership_id
+          and d.authorized_dealer_id is not null
+          and d.authorized_dealer_id = public.current_user_dealer_id()))
   or (public.current_user_role() = 'dealership' and dealership_id = public.current_user_dealership_id())
 );
 -- Only a dealership user may place an order, and only for THEIR OWN location.
@@ -349,7 +390,11 @@ create policy orders_insert on orders for insert with check (
 -- (A dealership user can update/cancel their own order before it's worked.)
 create policy orders_update on orders for update using (
   public.is_admin()
-  or (public.current_user_role() = 'installer'  and group_id      = public.current_user_group_id())
+  or (public.current_user_role() = 'installer' and exists (
+        select 1 from dealerships d
+        where d.id = orders.dealership_id
+          and d.authorized_dealer_id is not null
+          and d.authorized_dealer_id = public.current_user_dealer_id()))
   or (public.current_user_role() = 'dealership' and dealership_id = public.current_user_dealership_id())
 );
 
@@ -362,7 +407,11 @@ create policy order_items_select on order_items for select using (
     where o.id = order_items.order_id
       and (
         public.is_admin()
-        or (public.current_user_role() = 'installer'  and o.group_id      = public.current_user_group_id())
+        or (public.current_user_role() = 'installer' and exists (
+              select 1 from dealerships d
+              where d.id = o.dealership_id
+                and d.authorized_dealer_id is not null
+                and d.authorized_dealer_id = public.current_user_dealer_id()))
         or (public.current_user_role() = 'dealership' and o.dealership_id = public.current_user_dealership_id())
       )
   )
@@ -384,7 +433,11 @@ create policy status_history_select on order_status_history for select using (
     where o.id = order_status_history.order_id
       and (
         public.is_admin()
-        or (public.current_user_role() = 'installer'  and o.group_id      = public.current_user_group_id())
+        or (public.current_user_role() = 'installer' and exists (
+              select 1 from dealerships d
+              where d.id = o.dealership_id
+                and d.authorized_dealer_id is not null
+                and d.authorized_dealer_id = public.current_user_dealer_id()))
         or (public.current_user_role() = 'dealership' and o.dealership_id = public.current_user_dealership_id())
       )
   )

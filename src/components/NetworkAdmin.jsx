@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getGroups, getDealerships } from '../lib/db'
+import { getGroups, getDealerships, getAuthorizedDealers } from '../lib/db'
 import { createGroup, renameGroup, createDealership, updateDealership, deleteDealership } from '../lib/adminDb'
 
 import { COLOR as X, FONT, CARD } from '../lib/theme'
@@ -7,13 +7,14 @@ import { COLOR as X, FONT, CARD } from '../lib/theme'
 export default function NetworkAdmin() {
   const [groups, setGroups] = useState([])
   const [stores, setStores] = useState([])
+  const [dealers, setDealers] = useState([])
   const [err, setErr] = useState('')
   const [newGroup, setNewGroup] = useState('')
   const [indie, setIndie] = useState(null) // {name, city, state} when adding an independent rooftop
 
   const load = () =>
-    Promise.all([getGroups(), getDealerships()])
-      .then(([g, d]) => { setGroups(g); setStores(d) })
+    Promise.all([getGroups(), getDealerships(), getAuthorizedDealers()])
+      .then(([g, d, ad]) => { setGroups(g); setStores(d); setDealers(ad) })
       .catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
 
@@ -58,13 +59,13 @@ export default function NetworkAdmin() {
         </div>
       )}
       {groups.map((g) => (
-        <GroupCard key={g.id} group={g} stores={stores.filter((s) => s.group_id === g.id)} onChanged={load} onError={setErr} />
+        <GroupCard key={g.id} group={g} stores={stores.filter((s) => s.group_id === g.id)} dealers={dealers} onChanged={load} onError={setErr} />
       ))}
     </div>
   )
 }
 
-function GroupCard({ group, stores, onChanged, onError }) {
+function GroupCard({ group, stores, dealers, onChanged, onError }) {
   const [name, setName] = useState(group.name)
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ name: '', city: '', state: '' })
@@ -96,12 +97,12 @@ function GroupCard({ group, stores, onChanged, onError }) {
           <button style={{ ...btnPrimary, opacity: f.name.trim() ? 1 : 0.5 }} disabled={!f.name.trim()} onClick={addStore}>Add</button>
         </div>
       )}
-      {stores.map((s) => <StoreRow key={s.id} store={s} onChanged={onChanged} onError={onError} />)}
+      {stores.map((s) => <StoreRow key={s.id} store={s} dealerName={dealers.find((d) => d.id === s.authorized_dealer_id)?.name} onChanged={onChanged} onError={onError} />)}
     </div>
   )
 }
 
-function StoreRow({ store, onChanged, onError }) {
+function StoreRow({ store, dealerName, onChanged, onError }) {
   const [f, setF] = useState({ name: store.name, city: store.city || '', state: store.state || '' })
   const dirty = f.name !== store.name || f.city !== (store.city || '') || f.state !== (store.state || '')
 
@@ -119,6 +120,9 @@ function StoreRow({ store, onChanged, onError }) {
       <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} style={{ ...input, flex: 2 }} />
       <input value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} style={{ ...input, flex: 1 }} placeholder="City" />
       <input value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} style={{ ...input, width: 70 }} placeholder="ST" />
+      {dealerName
+        ? <span style={svcChip} title="Serviced by this XPEL Authorized Dealer (assigned in the Authorized Dealers tab)">{dealerName}</span>
+        : <span style={{ ...svcChip, color: X.red, borderColor: 'rgba(125,20,25,0.35)' }} title="No authorized dealer services this rooftop yet — assign one in the Authorized Dealers tab">No dealer</span>}
       {dirty && <button style={btnPrimary} onClick={save}>Save</button>}
       <button style={{ ...btnGhost, color: X.red, borderColor: X.red }} onClick={remove}>Delete</button>
     </div>
@@ -129,4 +133,5 @@ const panel = { ...CARD, padding: 18 }
 const input = { border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 11px', fontSize: 14, fontFamily: FONT.body, background: '#FFFFFD' }
 const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '9px 16px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: FONT.body }
 const btnGhostTop = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 16px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: FONT.body }
+const svcChip = { fontFamily: FONT.body, fontSize: 11, fontWeight: 700, color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 999, padding: '4px 10px', whiteSpace: 'nowrap' }
 const btnGhost = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 16px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }

@@ -4,6 +4,7 @@ import { getGroups, getDealerships, getOrders, getNetworkPerformance } from '../
 import UsersAdmin from './UsersAdmin'
 import NetworkAdmin from './NetworkAdmin'
 import CatalogAdmin from './CatalogAdmin'
+import DealersAdmin from './DealersAdmin'
 import OrdersList from './OrdersList'
 import PerformanceDashboard from './PerformanceDashboard'
 import { usePersistentState } from '../lib/uiState'
@@ -14,7 +15,7 @@ import { Eyebrow, Sheen, useCountUp } from './ui'
 const money = (n) => fm(n, 0)
 const STATUSES = ['submitted', 'in_review', 'approved', 'in_progress', 'completed', 'cancelled']
 const STATUS_TABS = { all: 'All', submitted: 'Submitted', in_review: 'In Review', approved: 'Approved', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled' }
-const TABS = { overview: 'Overview', performance: 'Performance', orders: 'Orders', users: 'Users', network: 'Network', catalog: 'Catalog & Pricing' }
+const TABS = { overview: 'Overview', performance: 'Performance', orders: 'Orders', users: 'Users', network: 'Network', dealers: 'Authorized Dealers', catalog: 'Catalog & Pricing' }
 
 // Admin area. The Overview is fully interactive: stat cards and status tiles
 // navigate to the data they represent (Orders view with a preset filter, the
@@ -36,6 +37,7 @@ export default function AdminDashboard() {
       {tab === 'orders' && <OrdersTab filter={orderFilter} setFilter={setOrderFilter} />}
       {tab === 'users' && <UsersAdmin />}
       {tab === 'network' && <NetworkAdmin />}
+      {tab === 'dealers' && <DealersAdmin />}
       {tab === 'catalog' && <CatalogAdmin />}
     </div>
   )

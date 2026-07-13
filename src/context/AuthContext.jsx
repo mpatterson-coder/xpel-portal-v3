@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
     setLoading(true)
     supabase
       .from('profiles')
-      .select('id, full_name, role, group_id, dealership_id')
+      .select('id, full_name, role, group_id, dealership_id, authorized_dealer_id')
       .eq('id', userId)
       .single()
       .then(({ data, error }) => {
@@ -75,6 +75,7 @@ export function AuthProvider({ children }) {
     role: profile?.role ?? null, // 'dealership' | 'installer' | 'admin'
     groupId: profile?.group_id ?? null,
     dealershipId: profile?.dealership_id ?? null,
+    dealerId: profile?.authorized_dealer_id ?? null,
     loading,
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
     signOut: () => supabase.auth.signOut(),

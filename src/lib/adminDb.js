@@ -13,7 +13,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient'
 export async function getAllProfiles() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, group_id, dealership_id, created_at, group:dealership_groups(name), dealership:dealerships(name)')
+    .select('id, email, full_name, role, group_id, dealership_id, authorized_dealer_id, created_at, group:dealership_groups(name), dealership:dealerships(name), dealer:authorized_dealers(name)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data ?? []
@@ -43,8 +43,13 @@ export async function adminCreateUser({ email, password, full_name }) {
 // Assign or transfer a user: change role, group, and/or store.
 // Passing nulls for group/dealership (with role 'dealership') deactivates
 // them back to the zero-access holding screen.
-export async function updateProfileAssignment(profileId, { role, group_id, dealership_id, full_name }) {
-  const patch = { role, group_id, dealership_id }
+export async function updateProfileAssignment(profileId, { role, group_id, dealership_id, authorized_dealer_id, full_name }) {
+  const patch = {
+    role,
+    group_id: group_id ?? null,
+    dealership_id: dealership_id ?? null,
+    authorized_dealer_id: authorized_dealer_id ?? null,
+  }
   if (full_name !== undefined) patch.full_name = full_name
   const { data, error } = await supabase
     .from('profiles')
@@ -54,6 +59,39 @@ export async function updateProfileAssignment(profileId, { role, group_id, deale
     .single()
   if (error) throw error
   return data
+}
+
+// ---- XPEL Authorized Dealers ---------------------------------------------------
+
+export async function createAuthorizedDealer({ name, city, state }) {
+  const { data, error } = await supabase
+    .from('authorized_dealers')
+    .insert({ name, city: city || null, state: state || null })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateAuthorizedDealer(id, patch) {
+  const { error } = await supabase.from('authorized_dealers').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+// Deleting a dealer un-services its rooftops and unlinks its installer users
+// (database sets those links to null) — they lose access until reassigned.
+export async function deleteAuthorizedDealer(id) {
+  const { error } = await supabase.from('authorized_dealers').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Point a rooftop at the dealer that services it (or null to un-service it).
+export async function setRooftopDealer(dealershipId, authorized_dealer_id) {
+  const { error } = await supabase
+    .from('dealerships')
+    .update({ authorized_dealer_id })
+    .eq('id', dealershipId)
+  if (error) throw error
 }
 
 // ---- Network: groups & dealerships -------------------------------------------

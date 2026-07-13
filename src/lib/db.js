@@ -48,6 +48,14 @@ export async function getDealerships() {
   return data ?? []
 }
 
+// XPEL Authorized Dealers (RLS: admins see all; an installer sees their own;
+// a dealership user sees the dealer that services their rooftop).
+export async function getAuthorizedDealers() {
+  const { data, error } = await supabase.from('authorized_dealers').select('*').order('name')
+  if (error) throw error
+  return data ?? []
+}
+
 // ---- Orders -----------------------------------------------------------------
 
 // All orders the current user may see (RLS scopes this automatically:

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getDealerships, getGroups } from '../lib/db'
+import { getDealerships, getAuthorizedDealers } from '../lib/db'
 import { COLOR as X, FONT } from '../lib/theme'
 import { Sheen } from './ui'
 
@@ -29,14 +29,17 @@ function greeting() {
 }
 
 export default function PageHero() {
-  const { profile, role, dealershipId } = useAuth()
+  const { profile, role, dealershipId, dealerId } = useAuth()
   const [place, setPlace] = useState('')
 
   useEffect(() => {
     let on = true
     if (role === 'admin') { setPlace('XPEL, Inc. — Network Administration'); return undefined }
     if (role === 'installer') {
-      getGroups().then((g) => { if (on && g[0]?.name) setPlace(g[0].name) }).catch(() => {})
+      getAuthorizedDealers().then((ds) => {
+        const d = ds.find((x) => x.id === dealerId) || ds[0]
+        if (on && d) setPlace(`${d.name} — XPEL Authorized Dealer`)
+      }).catch(() => {})
     }
     if (role === 'dealership') {
       getDealerships().then((ds) => {
@@ -45,7 +48,7 @@ export default function PageHero() {
       }).catch(() => {})
     }
     return () => { on = false }
-  }, [role, dealershipId])
+  }, [role, dealershipId, dealerId])
 
   const first = (profile?.full_name ?? '').trim().split(' ')[0]
   const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
