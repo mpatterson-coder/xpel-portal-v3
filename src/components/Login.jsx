@@ -48,7 +48,7 @@ export default function Login() {
         <button type="submit" disabled={busy} style={{ ...s.button, opacity: busy ? 0.6 : 1 }}>
           {busy ? 'Signing in…' : 'Sign In'}
         </button>
-        <div style={s.foot}>XPEL pilot — authorized dealers only</div>
+        <div style={s.foot}>© XPEL 2026 · Authorized dealers only</div>
       </form>
     </div>
   )
@@ -83,7 +83,7 @@ const s = {
   },
   button: {
     marginTop: 28, background: COLOR.yellow, color: COLOR.black, border: 'none',
-    borderRadius: 999, padding: '15px 16px', fontSize: 13, fontWeight: 800,
+    borderRadius: 8, padding: '15px 16px', fontSize: 13, fontWeight: 800,
     textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontFamily: FONT.body, cursor: 'pointer',
   },
   error: { marginTop: 16, color: '#E4837F', fontSize: 13.5 },

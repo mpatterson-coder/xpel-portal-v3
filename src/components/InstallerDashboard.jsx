@@ -50,7 +50,7 @@ function QueueView() {
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
       <div style={{ ...CARD, padding: 8, overflow: 'hidden' }}>
-        {shown.length === 0 && <div style={{ color: X.slate, padding: 16, fontSize: 14 }}>Nothing in this view.</div>}
+        {shown.length === 0 && <div style={{ color: X.slate, padding: 16, fontSize: 14 }}>All clear — nothing in this view.</div>}
         {shown.map((o) => <QueueRow key={o.id} order={o} onChanged={load} />)}
       </div>
     </div>

@@ -3,8 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#141213" />
     <meta name="robots" content="noindex" />
     <title>XPEL Dealership Portal</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23141213'/%3E%3Cpath d='M26 18h20l-8 28H18z' fill='%23FDB521'/%3E%3C/svg%3E">
     <!-- =====================================================================
          Global interaction layer — the "feel" of the portal.
          Design system: XPEL Brand Guidelines V1 2026 (Automotive palette,
@@ -64,6 +66,11 @@
       /* Clickable cards lift toward the hand. */
       .x-lift { transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
       .x-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(20,18,19,.08), 0 20px 44px rgba(20,18,19,.12) !important; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .x-fade, .x-spinner { animation: none !important; }
+        *, *::before, *::after { transition: none !important; }
+      }
 
       ::-webkit-scrollbar { width: 10px; height: 10px; }
       ::-webkit-scrollbar-thumb { background: #D9D5CA; border-radius: 8px; border: 2px solid #F6F5F1; }

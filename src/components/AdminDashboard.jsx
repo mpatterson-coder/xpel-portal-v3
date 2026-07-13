@@ -9,7 +9,7 @@ import PerformanceDashboard from './PerformanceDashboard'
 import { usePersistentState } from '../lib/uiState'
 import { COLOR as X, FONT, CARD, money as fm } from '../lib/theme'
 import TabNav from './TabNav'
-import { Eyebrow, Sheen } from './ui'
+import { Eyebrow, Sheen, useCountUp } from './ui'
 
 const money = (n) => fm(n, 0)
 const STATUSES = ['submitted', 'in_review', 'approved', 'in_progress', 'completed', 'cancelled']
@@ -78,16 +78,16 @@ function OverviewTab({ onNavigate }) {
         <Stat label="Dealer groups" value={groups.length} onClick={() => onNavigate('network')} />
         <Stat label="Enrolled rooftops" value={dealerships.length} onClick={() => onNavigate('network')} />
         <Stat label="Orders" value={orders.length} onClick={() => onNavigate('orders', 'all')} />
-        <Stat label="Network revenue" value={money(view.revenue)} onClick={() => onNavigate('orders', 'all')} />
+        <Stat label="Network revenue" value={view.revenue} format={money} onClick={() => onNavigate('orders', 'all')} />
       </div>
 
       <Panel title="Sales performance by group">
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={view.rows} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-            <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: 'Arial' }} />
-            <YAxis tickFormatter={(v) => money(v)} tick={{ fontSize: 11 }} width={70} />
-            <Tooltip formatter={(v) => money(v)} />
-            <Bar dataKey="revenue" radius={[4, 4, 0, 0]} cursor="pointer" onClick={() => onNavigate('orders', 'all')}>
+            <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: 'Arial', fill: X.slate }} tickLine={false} axisLine={{ stroke: X.stone }} />
+            <YAxis tickFormatter={(v) => money(v)} tick={{ fontSize: 11, fill: X.slate }} width={70} tickLine={false} axisLine={false} />
+            <Tooltip formatter={(v) => money(v)} contentStyle={{ background: '#141213', border: 'none', borderRadius: 10, boxShadow: '0 12px 28px rgba(0,0,0,0.35)', padding: '10px 12px' }} labelStyle={{ color: 'rgba(255,255,253,0.7)', fontSize: 11 }} itemStyle={{ color: '#FFFFFD' }} cursor={{ fill: 'rgba(231,228,218,0.35)' }} />
+            <Bar dataKey="revenue" radius={[6, 6, 0, 0]} cursor="pointer" onClick={() => onNavigate('orders', 'all')}>
               {view.rows.map((_, i) => <Cell key={i} fill={X.yellow} />)}
             </Bar>
           </BarChart>
@@ -142,14 +142,20 @@ function OrdersTab({ filter, setFilter }) {
   )
 }
 
-const Stat = ({ label, value, onClick }) => (
-  <button onClick={onClick} className="x-lift"
-    style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, border: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
-    <Sheen />
-    <div style={{ color: X.white, fontSize: 26, fontWeight: 800 }}>{value}</div>
-    <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label} →</div>
-  </button>
-)
+const Stat = ({ label, value, format, onClick }) => {
+  const shown = useCountUp(value)
+  const display = typeof value === 'number'
+    ? (format ? format(shown) : Math.round(shown).toLocaleString())
+    : value
+  return (
+    <button onClick={onClick} className="x-lift"
+      style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, border: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
+      <Sheen />
+      <div style={{ color: X.white, fontSize: 26, fontWeight: 800 }}>{display}</div>
+      <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label} →</div>
+    </button>
+  )
+}
 
 const Panel = ({ title, children }) => (
   <div style={{ ...CARD, padding: 22, marginTop: 16 }}>

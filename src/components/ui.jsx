@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { COLOR as X, FONT } from '../lib/theme'
 
 // =============================================================================
@@ -35,3 +36,33 @@ export const Spinner = ({ label = 'Loading…' }) => (
     <span className="x-spinner" style={{ width: 18, height: 18 }} />{label}
   </div>
 )
+
+// Animate a number toward its target (finished-product KPI feel). Snaps
+// instantly for non-numbers and for users who prefer reduced motion.
+const prefersReduced = typeof window !== 'undefined'
+  && window.matchMedia
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+export function useCountUp(target, duration = 700) {
+  const [val, setVal] = useState(typeof target === 'number' ? 0 : target)
+  const prevRef = useRef(0)
+  useEffect(() => {
+    if (typeof target !== 'number' || !isFinite(target) || prefersReduced) {
+      setVal(target); prevRef.current = typeof target === 'number' ? target : 0
+      return undefined
+    }
+    const from = prevRef.current
+    let raf
+    const t0 = performance.now()
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / duration)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setVal(from + (target - from) * eased)
+      if (p < 1) raf = requestAnimationFrame(tick)
+      else prevRef.current = target
+    }
+    raf = requestAnimationFrame(tick)
+    return () => { cancelAnimationFrame(raf); prevRef.current = target }
+  }, [target, duration])
+  return val
+}

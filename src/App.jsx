@@ -1,5 +1,6 @@
 import { useAuth } from './context/AuthContext'
 import Login from './components/Login'
+import PageHero from './components/PageHero'
 import DealershipDashboard from './components/DealershipDashboard'
 import InstallerDashboard from './components/InstallerDashboard'
 import AdminDashboard from './components/AdminDashboard'
@@ -11,13 +12,13 @@ const ROLE_LABEL = { dealership: 'Dealership', installer: 'Installer', admin: 'X
 export default function App() {
   const { user, profile, role, loading, signOut } = useAuth()
 
+  // Branded boot screen — the product turning on, not a page loading.
   if (loading) {
     return (
-      <Centered>
-        <div style={{ textAlign: 'center' }}>
-          <span className="x-spinner" />
-        </div>
-      </Centered>
+      <div style={{ minHeight: '100vh', background: COLOR.black, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
+        <img className="x-fade" src={logoWhite} alt="XPEL" style={{ width: 150 }} />
+        <span className="x-spinner" style={{ borderColor: 'rgba(255,255,253,0.15)', borderTopColor: COLOR.yellow }} />
+      </div>
     )
   }
   if (!user) return <Login />
@@ -38,7 +39,7 @@ export default function App() {
   }
 
   return (
-    <div>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Frosted, sticky command bar — Carbon Black glass over the content. */}
       <div style={bar}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -61,10 +62,23 @@ export default function App() {
         </div>
       </div>
 
-      <div className="x-fade" style={{ padding: '28px 28px 56px', maxWidth: 1240, margin: '0 auto' }}>
+      <div className="x-fade" style={{ flex: 1, width: '100%', padding: '28px 28px 56px', maxWidth: 1240, margin: '0 auto' }}>
+        <PageHero />
         {role === 'dealership' && <DealershipDashboard />}
         {role === 'installer' && <InstallerDashboard />}
         {role === 'admin' && <AdminDashboard />}
+      </div>
+
+      {/* Product footer — xpel.com format. */}
+      <div style={foot}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <img src={logoWhite} alt="XPEL" style={{ width: 72, display: 'block', opacity: 0.95 }} />
+          <span style={{ color: 'rgba(255,255,253,0.5)', fontSize: 12 }}>© XPEL 2026 · Dealership Portal — Pilot V3</span>
+        </div>
+        <div style={{ color: 'rgba(255,255,253,0.5)', fontSize: 12 }}>
+          Built on the 2026 XPEL brand system ·{' '}
+          <a href="https://www.xpel.com" target="_blank" rel="noreferrer" style={{ color: COLOR.yellow, textDecoration: 'none', fontWeight: 700 }}>xpel.com</a>
+        </div>
       </div>
     </div>
   )
@@ -86,8 +100,12 @@ const ghost = {
 }
 const btn = {
   marginTop: 20, background: COLOR.yellow, color: COLOR.black, border: 'none',
-  borderRadius: 999, padding: '12px 22px', fontWeight: 800, textTransform: 'uppercase',
+  borderRadius: 8, padding: '12px 22px', fontWeight: 800, textTransform: 'uppercase',
   letterSpacing: '0.08em', cursor: 'pointer', fontFamily: FONT.body, fontSize: 12,
+}
+const foot = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+  background: COLOR.black, borderTop: `3px solid ${COLOR.yellow}`, padding: '18px 28px',
 }
 
 function Centered({ children }) {

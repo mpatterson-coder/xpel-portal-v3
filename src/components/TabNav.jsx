@@ -7,7 +7,7 @@ export default function TabNav({ tabs, value, onChange, style }) {
   return (
     <div style={{
       display: 'inline-flex', flexWrap: 'wrap', gap: 2,
-      background: '#ECEAE2', borderRadius: 12, padding: 4, marginBottom: 18, ...style,
+      background: '#ECEAE2', borderRadius: 12, padding: 4, marginBottom: 18, boxShadow: 'inset 0 1px 2px rgba(20,18,19,0.07)', ...style,
     }}>
       {Object.entries(tabs).map(([k, lbl]) => {
         const on = value === k

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts'
+import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { fetchPerformanceRows, applyFilters, computeTotals, timeSeries, breakdown, filterOptions } from '../lib/analytics'
 import { usePersistentState } from '../lib/uiState'
 import { COLOR as X, FONT, CARD, money } from '../lib/theme'
-import { Eyebrow, Sheen, Spinner } from './ui'
+import { Eyebrow, Sheen, Spinner, useCountUp } from './ui'
 
 // =============================================================================
 // The performance dashboard, shared by all three roles via `mode`:
@@ -70,7 +70,7 @@ export default function PerformanceDashboard({ mode }) {
   const filtersActive = f.preset !== 'all' || f.category || f.productId || f.groupId
 
   const titles = {
-    dealership: ['Store Performance', 'Live profitability and package performance for this store.'],
+    dealership: ['Store Performance', 'Margin on every order, tracked live.'],
     installer: ['Shop Performance', 'Wholesale volume billed to your dealerships.'],
     admin: ['Network Performance', 'Full-transparency view across every group, rooftop, and product.'],
   }
@@ -120,15 +120,15 @@ export default function PerformanceDashboard({ mode }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
             {mode === 'dealership' && (
               <>
-                <Kpi label="Revenue (retail)" value={fm0(totals.retail)} />
-                <Kpi label="Your margin" value={fm0(totals.margin)} sub={`${totals.marginPct}% of revenue`} />
+                <Kpi label="Revenue (retail)" value={totals.retail} format={fm0} />
+                <Kpi label="Your margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of revenue`} />
                 <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages sold`} />
-                <Kpi label="Avg order" value={fm0(totals.avgOrder)} />
+                <Kpi label="Avg order" value={totals.avgOrder} format={fm0} />
               </>
             )}
             {mode === 'installer' && (
               <>
-                <Kpi label="Wholesale revenue" value={fm0(totals.wholesale)} />
+                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0} />
                 <Kpi label="Jobs" value={totals.orders} />
                 <Kpi label="Packages installed" value={totals.units} />
                 <Kpi label="Jobs completed" value={totals.completed} sub={`avg ${fm0(totals.avgWholesaleOrder)} / job`} />
@@ -136,9 +136,9 @@ export default function PerformanceDashboard({ mode }) {
             )}
             {mode === 'admin' && (
               <>
-                <Kpi label="Retail revenue" value={fm0(totals.retail)} />
-                <Kpi label="Wholesale revenue" value={fm0(totals.wholesale)} />
-                <Kpi label="Dealer margin" value={fm0(totals.margin)} sub={`${totals.marginPct}% of retail`} />
+                <Kpi label="Retail revenue" value={totals.retail} format={fm0} />
+                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0} />
+                <Kpi label="Dealer margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of retail`} />
                 <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages`} />
               </>
             )}
@@ -151,18 +151,24 @@ export default function PerformanceDashboard({ mode }) {
           {filtered.length > 0 && (
             <>
               <Panel title="Revenue over time">
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={series} margin={{ top: 8, right: 8, bottom: 4, left: 8 }}>
+                <ResponsiveContainer width="100%" height={250}>
+                  <ComposedChart data={series} margin={{ top: 8, right: 8, bottom: 4, left: 8 }}>
+                    <defs>
+                      <linearGradient id="xPrimaryFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={X.black} stopOpacity={0.10} />
+                        <stop offset="100%" stopColor={X.black} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid stroke={X.stone} vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fontFamily: 'Arial' }} />
-                    <YAxis tickFormatter={fm0} tick={{ fontSize: 11 }} width={74} />
-                    <Tooltip formatter={(v) => fm0(v)} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fontFamily: 'Arial', fill: X.slate }} tickLine={false} axisLine={{ stroke: X.stone }} />
+                    <YAxis tickFormatter={fm0} tick={{ fontSize: 11, fill: X.slate }} width={74} tickLine={false} axisLine={false} />
+                    <Tooltip formatter={(v) => fm0(v)} contentStyle={tipStyle} labelStyle={tipLabel} itemStyle={{ color: X.white }} cursor={{ stroke: X.gray }} />
                     {mode !== 'installer' && <Legend wrapperStyle={{ fontSize: 12 }} />}
-                    {mode !== 'installer' && <Line dataKey="retail" name="Retail" stroke={X.black} strokeWidth={2} dot={false} />}
-                    {mode === 'admin' && <Line dataKey="wholesale" name="Wholesale" stroke={X.slate} strokeWidth={2} dot={false} />}
-                    {mode !== 'installer' && <Line dataKey="margin" name="Margin" stroke={X.green} strokeWidth={2} dot={false} />}
-                    {mode === 'installer' && <Line dataKey="wholesale" name="Wholesale revenue" stroke={X.black} strokeWidth={2} dot={false} />}
-                  </LineChart>
+                    {mode !== 'installer' && <Area type="monotone" dataKey="retail" name="Retail" stroke={X.black} strokeWidth={2.5} fill="url(#xPrimaryFill)" dot={false} activeDot={{ r: 4, fill: X.yellow, stroke: X.black, strokeWidth: 2 }} />}
+                    {mode === 'admin' && <Line type="monotone" dataKey="wholesale" name="Wholesale" stroke={X.slate} strokeWidth={2} dot={false} />}
+                    {mode !== 'installer' && <Line type="monotone" dataKey="margin" name="Margin" stroke={X.green} strokeWidth={2} dot={false} />}
+                    {mode === 'installer' && <Area type="monotone" dataKey="wholesale" name="Wholesale revenue" stroke={X.black} strokeWidth={2.5} fill="url(#xPrimaryFill)" dot={false} activeDot={{ r: 4, fill: X.yellow, stroke: X.black, strokeWidth: 2 }} />}
+                  </ComposedChart>
                 </ResponsiveContainer>
               </Panel>
 
@@ -187,7 +193,9 @@ export default function PerformanceDashboard({ mode }) {
                       </thead>
                       <tbody>
                         {[...byRooftop].sort((a, b) => b.retail - a.retail).slice(0, 10).map((r) => (
-                          <tr key={r.key}>
+                          <tr key={r.key} style={{ transition: 'background .15s ease' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = X.bg }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = '' }}>
                             <Td>{r.name}</Td><Td r>{r.orders}</Td><Td r>{r.units}</Td>
                             <Td r>{fm0(r.retail)}</Td><Td r style={{ color: X.green }}>{fm0(r.margin)}</Td>
                           </tr>
@@ -236,14 +244,20 @@ function BarList({ items, valueKey, mode }) {
   )
 }
 
-const Kpi = ({ label, value, sub }) => (
-  <div style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
-    <Sheen />
-    <div style={{ color: X.white, fontSize: 24, fontWeight: 800 }}>{value}</div>
-    <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label}</div>
-    {sub && <div style={{ color: '#8C8983', fontSize: 11, marginTop: 3 }}>{sub}</div>}
-  </div>
-)
+const Kpi = ({ label, value, format, sub }) => {
+  const shown = useCountUp(value)
+  const display = typeof value === 'number'
+    ? (format ? format(shown) : Math.round(shown).toLocaleString())
+    : value
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
+      <Sheen />
+      <div style={{ color: X.white, fontSize: 24, fontWeight: 800 }}>{display}</div>
+      <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label}</div>
+      {sub && <div style={{ color: '#8C8983', fontSize: 11, marginTop: 3 }}>{sub}</div>}
+    </div>
+  )
+}
 
 const Panel = ({ title, children }) => (
   <div style={{ ...CARD, padding: 22, marginTop: 16 }}>
@@ -255,5 +269,7 @@ const Panel = ({ title, children }) => (
 const Th = ({ children, r }) => <th style={{ textAlign: r ? 'right' : 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: X.slate, padding: '8px 6px', borderBottom: `1px solid ${X.gray}` }}>{children}</th>
 const Td = ({ children, r, style }) => <td style={{ textAlign: r ? 'right' : 'left', fontSize: 14, padding: '8px 6px', borderBottom: `1px solid ${X.line}`, ...style }}>{children}</td>
 const tbl = { width: '100%', borderCollapse: 'collapse' }
+const tipStyle = { background: '#141213', border: 'none', borderRadius: 10, boxShadow: '0 12px 28px rgba(0,0,0,0.35)', padding: '10px 12px' }
+const tipLabel = { color: 'rgba(255,255,253,0.7)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }
 const sel = { border: `1px solid ${X.gray}`, background: '#FFFFFD', borderRadius: 10, padding: '9px 12px', fontSize: 13, fontWeight: 600, fontFamily: FONT.body, color: X.black }
 const clearBtn = { border: 'none', background: 'transparent', color: X.slate, fontSize: 12, cursor: 'pointer', textDecoration: 'underline', fontFamily: FONT.body }

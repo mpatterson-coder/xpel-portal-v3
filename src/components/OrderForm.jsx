@@ -124,7 +124,7 @@ export default function OrderForm({ onCreated }) {
         vehicle_trim: veh.trim.trim() || null,
         vehicle_size: veh.size,
       })
-      setMsg(`Order ${order.order_number} submitted.`)
+      setMsg(`✓ Order ${order.order_number} submitted.`)
       // Clear the draft (persistence saves the cleared values, so nothing lingers).
       setVin(''); setVeh(EMPTY_VEH); setDecoded(false); setDecodeNote('')
       setCust(EMPTY_CUST); setLines([])
@@ -264,6 +264,6 @@ const inCartTag = { marginTop: 3, fontSize: 10.5, fontWeight: 800, textTransform
 const catItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', border: '1px solid rgba(20,18,19,0.08)', borderRadius: 12, padding: '11px 13px', background: '#FFFFFD', cursor: 'pointer', fontFamily: FONT.body }
 const tierTag = { display: 'inline-block', fontSize: 10, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: 700, color: X.black, background: X.yellow, borderRadius: 4, padding: '1px 7px', marginBottom: 4 }
 const desc = { fontSize: 11.5, color: X.slate, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }
-const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 999, padding: '14px 26px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body, fontSize: 13 }
+const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 8, padding: '14px 26px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body, fontSize: 13 }
 const btnDark = { background: X.black, color: '#fff', border: 'none', borderRadius: 10, padding: '0 20px', fontWeight: 700, cursor: 'pointer', fontFamily: FONT.body }
 const xBtn = { border: 'none', background: 'transparent', color: X.red, fontSize: 20, cursor: 'pointer', lineHeight: 1 }
