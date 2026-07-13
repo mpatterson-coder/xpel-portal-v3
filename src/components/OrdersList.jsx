@@ -1,11 +1,11 @@
-import { COLOR as X, FONT, STATUS_TONE, money, dateUS } from '../lib/theme'
+import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import StatusTimeline from './StatusTimeline'
 
 // Presentational list of orders. The parent decides which orders to pass in;
 // RLS already guarantees the user only receives orders they're allowed to see.
 export default function OrdersList({ orders, title = 'Orders' }) {
   return (
-    <div style={{ background: X.panel, border: `1px solid ${X.line}`, borderRadius: 10, padding: 24 }}>
+    <div style={{ ...CARD, padding: 24 }}>
       <h2 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: FONT.headingWeight }}>{title}</h2>
       {(!orders || orders.length === 0) && <div style={{ color: X.slate, fontSize: 14 }}>No orders yet.</div>}
       {orders?.map((o) => (
@@ -36,7 +36,7 @@ function Badge({ status }) {
     <span style={{
       fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1,
       color: t.fg, background: t.bg,
-      borderRadius: 4, padding: '3px 8px', width: 92, textAlign: 'center',
+      borderRadius: 999, padding: '4px 11px', width: 96, textAlign: 'center', fontWeight: 700,
     }}>{(status || '').replace('_', ' ')}</span>
   )
 }

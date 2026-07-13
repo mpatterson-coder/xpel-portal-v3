@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getGroups } from '../lib/db'
 import { getAllProducts, createProduct, updateProduct, getAllGroupPricing, upsertGroupPrice, deleteGroupPrice } from '../lib/adminDb'
-import { COLOR as X, FONT, money } from '../lib/theme'
+import { COLOR as X, FONT, CARD, money } from '../lib/theme'
 
 // Full-autonomy catalog management. EVERY field of every offering is editable
 // in-app: name, category (free text — creates new order-form sections
@@ -26,7 +26,7 @@ export default function CatalogAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontWeight: FONT.headingWeight }}>Catalog &amp; Pricing</h3>
+        <h3 style={{ margin: 0, fontSize: 19, fontWeight: FONT.headingWeight }}>Catalog &amp; Pricing</h3>
         <button style={btnPrimary} onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : '+ Add Offering'}</button>
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
@@ -95,7 +95,7 @@ function ProductEditor({ product, categories, onSave, onToggleActive, onError, i
   }
 
   return (
-    <div style={{ background: '#FFFDF5', border: `1px solid ${X.yellow}`, borderRadius: 10, padding: 14, margin: '4px 0 12px' }}>
+    <div className="x-fade" style={{ background: '#FFFDF5', border: '1px solid rgba(253,181,33,0.6)', borderRadius: 14, padding: 16, margin: '4px 0 12px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
         <Field label="SKU">
           <input value={f.sku} onChange={(e) => setF({ ...f, sku: e.target.value })} style={input} disabled={!isNew} placeholder="Unique code, e.g. PPF-UP-FF" />
@@ -187,8 +187,8 @@ const Field = ({ label, children }) => (
   </div>
 )
 
-const panel = { background: '#fff', border: `1px solid ${X.line}`, borderRadius: 12, padding: 16, fontFamily: FONT.body }
-const input = { width: '100%', boxSizing: 'border-box', border: `1px solid ${X.gray}`, borderRadius: 8, padding: '9px 10px', fontSize: 14, fontFamily: FONT.body, background: '#fff' }
-const badge = { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: 700, borderRadius: 4, padding: '3px 8px' }
-const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body }
-const btnGhost = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
+const panel = { ...CARD, padding: 18, fontFamily: FONT.body }
+const input = { width: '100%', boxSizing: 'border-box', border: `1px solid ${X.gray}`, borderRadius: 10, padding: '10px 11px', fontSize: 14, fontFamily: FONT.body, background: '#FFFFFD' }
+const badge = { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: 700, borderRadius: 999, padding: '4px 10px' }
+const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '10px 16px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body }
+const btnGhost = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '10px 16px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }

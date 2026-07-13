@@ -7,10 +7,13 @@ import CatalogAdmin from './CatalogAdmin'
 import OrdersList from './OrdersList'
 import PerformanceDashboard from './PerformanceDashboard'
 import { usePersistentState } from '../lib/uiState'
-import { COLOR as X, FONT, money as fm } from '../lib/theme'
+import { COLOR as X, FONT, CARD, money as fm } from '../lib/theme'
+import TabNav from './TabNav'
+import { Eyebrow, Sheen } from './ui'
 
 const money = (n) => fm(n, 0)
 const STATUSES = ['submitted', 'in_review', 'approved', 'in_progress', 'completed', 'cancelled']
+const STATUS_TABS = { all: 'All', submitted: 'Submitted', in_review: 'In Review', approved: 'Approved', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled' }
 const TABS = { overview: 'Overview', performance: 'Performance', orders: 'Orders', users: 'Users', network: 'Network', catalog: 'Catalog & Pricing' }
 
 // Admin area. The Overview is fully interactive: stat cards and status tiles
@@ -27,17 +30,7 @@ export default function AdminDashboard() {
 
   return (
     <div style={{ maxWidth: 1000, fontFamily: FONT.body }}>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-        {Object.entries(TABS).map(([k, lbl]) => (
-          <button key={k} onClick={() => { if (k === 'orders') setOrderFilter('all'); setTab(k) }}
-            style={{
-              border: `1px solid ${tab === k ? X.black : X.gray}`, background: tab === k ? X.black : '#fff',
-              color: tab === k ? '#fff' : X.slate, borderRadius: 8, padding: '8px 14px', fontSize: 12,
-              fontWeight: 700, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer',
-              fontFamily: FONT.body,
-            }}>{lbl}</button>
-        ))}
-      </div>
+      <TabNav tabs={TABS} value={tab} onChange={(k) => { if (k === 'orders') setOrderFilter('all'); setTab(k) }} />
       {tab === 'overview' && <OverviewTab onNavigate={go} />}
       {tab === 'performance' && <PerformanceDashboard mode="admin" />}
       {tab === 'orders' && <OrdersTab filter={orderFilter} setFilter={setOrderFilter} />}
@@ -78,7 +71,7 @@ function OverviewTab({ onNavigate }) {
 
   return (
     <div>
-      <h2 style={{ margin: '0 0 16px', fontSize: 20, fontWeight: FONT.headingWeight }}>Network Overview</h2>
+      <h2 style={{ margin: '0 0 16px', fontSize: 22, fontWeight: FONT.headingWeight }}>Network Overview</h2>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
@@ -119,7 +112,7 @@ function OverviewTab({ onNavigate }) {
       <Panel title="Operational performance — click a status to see its orders">
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {view.statusCounts.map((s) => (
-            <button key={s.status} onClick={() => onNavigate('orders', s.status)} style={opCard}>
+            <button key={s.status} onClick={() => onNavigate('orders', s.status)} className="x-lift" style={opCard}>
               <div style={{ fontSize: 22, fontWeight: 800 }}>{s.n}</div>
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: FONT.subWeight }}>
                 {s.status.replace('_', ' ')}
@@ -142,14 +135,7 @@ function OrdersTab({ filter, setFilter }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {['all', ...STATUSES].map((s) => (
-          <button key={s} onClick={() => setFilter(s)}
-            style={{ ...chip, ...(filter === s ? chipOn : {}) }}>
-            {s === 'all' ? 'All' : s.replace('_', ' ')}
-          </button>
-        ))}
-      </div>
+      <TabNav tabs={STATUS_TABS} value={filter} onChange={setFilter} style={{ marginBottom: 12 }} />
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
       <OrdersList orders={shown} title={title} />
     </div>
@@ -157,18 +143,17 @@ function OrdersTab({ filter, setFilter }) {
 }
 
 const Stat = ({ label, value, onClick }) => (
-  <button onClick={onClick}
-    style={{ background: X.black, borderRadius: 12, padding: 18, border: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: FONT.body }}
-    onMouseEnter={(e) => e.currentTarget.style.outline = `2px solid ${X.yellow}`}
-    onMouseLeave={(e) => e.currentTarget.style.outline = 'none'}>
-    <div style={{ color: '#fff', fontSize: 26, fontWeight: 800 }}>{value}</div>
+  <button onClick={onClick} className="x-lift"
+    style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, border: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
+    <Sheen />
+    <div style={{ color: X.white, fontSize: 26, fontWeight: 800 }}>{value}</div>
     <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label} →</div>
   </button>
 )
 
 const Panel = ({ title, children }) => (
-  <div style={{ background: '#fff', border: `1px solid ${X.line}`, borderRadius: 12, padding: 20, marginTop: 16 }}>
-    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: FONT.subWeight, marginBottom: 12 }}>{title}</div>
+  <div style={{ ...CARD, padding: 22, marginTop: 16 }}>
+    <Eyebrow>{title}</Eyebrow>
     {children}
   </div>
 )
@@ -176,6 +161,4 @@ const Panel = ({ title, children }) => (
 const Th = ({ children, r }) => <th style={{ textAlign: r ? 'right' : 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: X.slate, padding: '8px 6px', borderBottom: `1px solid ${X.gray}` }}>{children}</th>
 const Td = ({ children, r, style }) => <td style={{ textAlign: r ? 'right' : 'left', fontSize: 14, padding: '8px 6px', borderBottom: `1px solid ${X.line}`, ...style }}>{children}</td>
 const tbl = { width: '100%', borderCollapse: 'collapse', marginTop: 12 }
-const opCard = { flex: '1 1 120px', background: X.bg, border: `1px solid ${X.line}`, borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', fontFamily: FONT.body }
-const chip = { border: `1px solid ${X.gray}`, background: '#fff', color: X.slate, borderRadius: 8, padding: '7px 13px', fontSize: 12, fontWeight: 600, textTransform: 'capitalize', cursor: 'pointer', fontFamily: FONT.body }
-const chipOn = { background: X.black, color: '#fff', borderColor: X.black }
+const opCard = { flex: '1 1 120px', background: X.bg, border: '1px solid rgba(20,18,19,0.05)', borderRadius: 12, padding: 14, textAlign: 'center', cursor: 'pointer', fontFamily: FONT.body }

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { fetchPerformanceRows, applyFilters, computeTotals, timeSeries, breakdown, filterOptions } from '../lib/analytics'
 import { usePersistentState } from '../lib/uiState'
-import { COLOR as X, FONT, money } from '../lib/theme'
+import { COLOR as X, FONT, CARD, money } from '../lib/theme'
+import { Eyebrow, Sheen, Spinner } from './ui'
 
 // =============================================================================
 // The performance dashboard, shared by all three roles via `mode`:
@@ -76,7 +77,7 @@ export default function PerformanceDashboard({ mode }) {
 
   return (
     <div>
-      <h2 style={{ margin: '0 0 2px', fontSize: 20, fontWeight: FONT.headingWeight }}>{titles[mode][0]}</h2>
+      <h2 style={{ margin: '0 0 2px', fontSize: 22, fontWeight: FONT.headingWeight }}>{titles[mode][0]}</h2>
       <div style={{ fontSize: 13, color: X.slate, marginBottom: 14 }}>{titles[mode][1]}</div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
 
@@ -111,7 +112,7 @@ export default function PerformanceDashboard({ mode }) {
         )}
       </div>
 
-      {rows === null && !err && <div style={{ color: X.slate, fontSize: 14 }}>Loading performance data…</div>}
+      {rows === null && !err && <Spinner label="Loading performance data…" />}
 
       {rows !== null && (
         <>
@@ -226,8 +227,8 @@ function BarList({ items, valueKey, mode }) {
               {mode !== 'installer' && <span style={{ color: X.green, fontSize: 12 }}> · {money(i.margin, 0)} margin</span>}
             </span>
           </div>
-          <div style={{ height: 8, background: X.stone, borderRadius: 4, marginTop: 4 }}>
-            <div style={{ width: `${(i[valueKey] / max) * 100}%`, height: '100%', background: X.yellow, borderRadius: 4 }} />
+          <div style={{ height: 8, background: X.stone, borderRadius: 999, marginTop: 5, overflow: 'hidden' }}>
+            <div style={{ width: `${(i[valueKey] / max) * 100}%`, height: '100%', background: X.yellow, borderRadius: 999, transition: 'width .45s cubic-bezier(.2,.7,.3,1)' }} />
           </div>
         </div>
       ))}
@@ -236,7 +237,8 @@ function BarList({ items, valueKey, mode }) {
 }
 
 const Kpi = ({ label, value, sub }) => (
-  <div style={{ background: X.black, borderRadius: 12, padding: 18, fontFamily: FONT.body }}>
+  <div style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
+    <Sheen />
     <div style={{ color: X.white, fontSize: 24, fontWeight: 800 }}>{value}</div>
     <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label}</div>
     {sub && <div style={{ color: '#8C8983', fontSize: 11, marginTop: 3 }}>{sub}</div>}
@@ -244,8 +246,8 @@ const Kpi = ({ label, value, sub }) => (
 )
 
 const Panel = ({ title, children }) => (
-  <div style={{ background: X.panel, border: `1px solid ${X.line}`, borderRadius: 12, padding: 20, marginTop: 16 }}>
-    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: FONT.subWeight, marginBottom: 12 }}>{title}</div>
+  <div style={{ ...CARD, padding: 22, marginTop: 16 }}>
+    <Eyebrow>{title}</Eyebrow>
     {children}
   </div>
 )
@@ -253,5 +255,5 @@ const Panel = ({ title, children }) => (
 const Th = ({ children, r }) => <th style={{ textAlign: r ? 'right' : 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: X.slate, padding: '8px 6px', borderBottom: `1px solid ${X.gray}` }}>{children}</th>
 const Td = ({ children, r, style }) => <td style={{ textAlign: r ? 'right' : 'left', fontSize: 14, padding: '8px 6px', borderBottom: `1px solid ${X.line}`, ...style }}>{children}</td>
 const tbl = { width: '100%', borderCollapse: 'collapse' }
-const sel = { border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 8, padding: '8px 10px', fontSize: 13, fontFamily: FONT.body, color: X.black }
+const sel = { border: `1px solid ${X.gray}`, background: '#FFFFFD', borderRadius: 10, padding: '9px 12px', fontSize: 13, fontWeight: 600, fontFamily: FONT.body, color: X.black }
 const clearBtn = { border: 'none', background: 'transparent', color: X.slate, fontSize: 12, cursor: 'pointer', textDecoration: 'underline', fontFamily: FONT.body }

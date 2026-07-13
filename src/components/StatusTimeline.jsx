@@ -22,7 +22,7 @@ export default function StatusTimeline({ status, compact = false, style }) {
         title={cancelled ? 'Order cancelled' : `Stage ${idx + 1} of 5 — ${STAGES[idx][1]}`}>
         {STAGES.map(([k, l], i) => (
           <div key={k} title={l} style={{
-            flex: 1, height: 4, borderRadius: 2,
+            flex: 1, height: 5, borderRadius: 999, transition: 'background .25s ease',
             background: cancelled ? X.stone : i < idx ? X.black : i === idx ? X.yellow : X.stone,
           }} />
         ))}
@@ -53,6 +53,8 @@ export default function StatusTimeline({ status, compact = false, style }) {
                 width: 14, height: 14, borderRadius: '50%', zIndex: 1, boxSizing: 'border-box',
                 background: current ? X.yellow : done ? X.black : X.white,
                 border: `2px solid ${current ? X.yellow : done ? X.black : X.gray}`,
+                boxShadow: current ? '0 0 0 4px rgba(253,181,33,0.25)' : 'none',
+                transition: 'all .25s ease',
               }} />
               <div style={{
                 fontSize: 10, marginTop: 6, textAlign: 'center',

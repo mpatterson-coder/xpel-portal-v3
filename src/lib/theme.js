@@ -52,6 +52,21 @@ export const STATUS_TONE = {
   cancelled:   { bg: COLOR.red,    fg: COLOR.white },  // Garnet Red — performance accent
 }
 
+// Elevation & shape tokens — Apple-style layered depth on brand surfaces.
+export const ELEV = {
+  card:  '0 1px 2px rgba(20,18,19,0.04), 0 12px 32px rgba(20,18,19,0.05)',   // resting card
+  raise: '0 2px 8px rgba(20,18,19,0.08), 0 18px 44px rgba(20,18,19,0.11)',   // hover / focus
+  seg:   '0 1px 3px rgba(20,18,19,0.14), 0 1px 1px rgba(20,18,19,0.06)',     // active segment
+}
+
+// The standard card surface: Off-White, hairline edge, soft layered shadow.
+export const CARD = {
+  background: COLOR.panel,
+  border: '1px solid rgba(20,18,19,0.06)',
+  borderRadius: 16,
+  boxShadow: ELEV.card,
+}
+
 export const money = (n, frac = 2) =>
   '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: frac, maximumFractionDigits: frac })
 

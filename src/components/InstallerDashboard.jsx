@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder } from '../lib/db'
 import { usePersistentState } from '../lib/uiState'
-import { COLOR as X, FONT, STATUS_TONE, money, dateUS } from '../lib/theme'
+import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import StatusTimeline from './StatusTimeline'
 import TabNav from './TabNav'
 import PerformanceDashboard from './PerformanceDashboard'
@@ -45,15 +45,11 @@ function QueueView() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 20 }}>Fulfillment Queue</h2>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {Object.entries(FILTERS).map(([k, lbl]) => (
-            <button key={k} onClick={() => setFilter(k)} style={{ ...tab, ...(filter === k ? tabOn : {}) }}>{lbl}</button>
-          ))}
-        </div>
+        <h2 style={{ margin: 0, fontSize: 21, fontWeight: FONT.headingWeight }}>Fulfillment Queue</h2>
+        <TabNav tabs={FILTERS} value={filter} onChange={setFilter} style={{ marginBottom: 0 }} />
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
-      <div style={{ background: '#fff', border: `1px solid ${X.gray}`, borderRadius: 10, padding: 8 }}>
+      <div style={{ ...CARD, padding: 8, overflow: 'hidden' }}>
         {shown.length === 0 && <div style={{ color: X.slate, padding: 16, fontSize: 14 }}>Nothing in this view.</div>}
         {shown.map((o) => <QueueRow key={o.id} order={o} onChanged={load} />)}
       </div>
@@ -97,7 +93,7 @@ function QueueRow({ order, onChanged }) {
     : null
 
   return (
-    <div style={{ borderBottom: `1px solid ${X.gray}`, padding: '10px 12px' }}>
+    <div style={{ borderBottom: `1px solid ${X.line}`, padding: '11px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ fontFamily: FONT.body, fontSize: 12, color: X.slate, width: 92 }}>{order.order_number}</div>
         <div style={{ flex: 1, cursor: 'pointer' }} onClick={toggle}>
@@ -122,7 +118,7 @@ function QueueRow({ order, onChanged }) {
       </div>
 
       {open && (
-        <div style={{ marginTop: 10, padding: 14, background: X.bg, borderRadius: 8 }}>
+        <div className="x-fade" style={{ marginTop: 10, padding: 16, background: X.bg, borderRadius: 12 }}>
           {!detail && <div style={{ color: X.slate, fontSize: 13 }}>Loading…</div>}
           {detail?.error && <div style={{ color: X.red, fontSize: 13 }}>{detail.error}</div>}
           {detail && !detail.error && (
@@ -173,12 +169,10 @@ function QueueRow({ order, onChanged }) {
 
 function Badge({ status }) {
   const t = STATUS_TONE[status] || STATUS_TONE.submitted
-  return <span style={{ fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: t.fg, background: t.bg, borderRadius: 4, padding: '3px 8px', width: 92, textAlign: 'center' }}>{(status || '').replace('_', ' ')}</span>
+  return <span style={{ fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: t.fg, background: t.bg, borderRadius: 999, padding: '4px 11px', width: 96, textAlign: 'center', fontWeight: 700 }}>{(status || '').replace('_', ' ')}</span>
 }
 
-const secLbl = { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }
-const tab = { border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
-const tabOn = { background: X.black, color: '#fff', borderColor: X.black }
-const flag = { fontFamily: FONT.body, fontSize: 11, borderRadius: 4, padding: '3px 8px' }
-const statusSel = { border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 6, padding: '7px 8px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FONT.body, color: X.black }
-const saveBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '7px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
+const secLbl = { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6, fontWeight: 700 }
+const flag = { fontFamily: FONT.body, fontSize: 11, borderRadius: 999, padding: '4px 10px', fontWeight: 700 }
+const statusSel = { border: `1px solid ${X.gray}`, background: '#FFFFFD', borderRadius: 10, padding: '8px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FONT.body, color: X.black }
+const saveBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '8px 14px', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }

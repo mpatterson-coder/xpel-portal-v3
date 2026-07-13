@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getGroups, getDealerships } from '../lib/db'
 import { getAllProfiles, adminCreateUser, updateProfileAssignment } from '../lib/adminDb'
 
-import { COLOR as X, FONT } from '../lib/theme'
+import { COLOR as X, FONT, CARD } from '../lib/theme'
 const ROLES = ['dealership', 'installer', 'admin']
 
 export default function UsersAdmin() {
@@ -190,10 +190,10 @@ function EditRow({ profile, groups, stores, onDone, onCancel }) {
 function RoleTag({ role }) {
   const bg = role === 'admin' ? X.black : role === 'installer' ? X.strata : X.yellow
   const fg = role === 'installer' || role === 'admin' ? '#fff' : X.black
-  return <span style={{ fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, background: bg, color: fg, borderRadius: 4, padding: '3px 8px', width: 92, textAlign: 'center' }}>{role}</span>
+  return <span style={{ fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, background: bg, color: fg, borderRadius: 999, padding: '4px 11px', width: 96, textAlign: 'center', fontWeight: 700 }}>{role}</span>
 }
 
-const panel = { background: '#fff', border: `1px solid ${X.gray}`, borderRadius: 10, padding: 16 }
-const input = { border: `1px solid ${X.gray}`, borderRadius: 6, padding: '9px 10px', fontSize: 14, fontFamily: FONT.body, background: '#fff' }
-const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '9px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: FONT.body }
-const btnGhost = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 6, padding: '9px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
+const panel = { ...CARD, padding: 18 }
+const input = { border: `1px solid ${X.gray}`, borderRadius: 10, padding: '10px 11px', fontSize: 14, fontFamily: FONT.body, background: '#FFFFFD' }
+const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '10px 16px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: FONT.body }
+const btnGhost = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '10px 16px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }

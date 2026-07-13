@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getGroups, getDealerships } from '../lib/db'
 import { createGroup, renameGroup, createDealership, updateDealership, deleteDealership } from '../lib/adminDb'
 
-import { COLOR as X, FONT } from '../lib/theme'
+import { COLOR as X, FONT, CARD } from '../lib/theme'
 
 export default function NetworkAdmin() {
   const [groups, setGroups] = useState([])
@@ -25,7 +25,7 @@ export default function NetworkAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>Dealer Network</h3>
+        <h3 style={{ margin: 0, fontSize: 19, fontWeight: FONT.headingWeight }}>Dealer Network</h3>
         <div style={{ display: 'flex', gap: 8 }}>
           <input placeholder="New dealer group name" value={newGroup} onChange={(e) => setNewGroup(e.target.value)} style={input} />
           <button style={btnPrimary} onClick={addGroup}>+ Add Group</button>
@@ -36,7 +36,7 @@ export default function NetworkAdmin() {
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
       {indie && (
-        <div style={{ ...panel, marginBottom: 12, background: '#FFFDF5', border: `1px solid ${X.yellow}` }}>
+        <div style={{ ...panel, marginBottom: 12, background: '#FFFDF5', border: '1px solid rgba(253,181,33,0.6)', borderRadius: 14 }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>Independent Dealership</div>
           <div style={{ fontSize: 12.5, color: X.slate, marginBottom: 10 }}>
             For rooftops not tied to a larger group. It gets its own private space with the same
@@ -115,7 +115,7 @@ function StoreRow({ store, onChanged, onError }) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', borderTop: '1px solid #EEF0F2' }}>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', borderTop: `1px solid ${X.line}` }}>
       <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} style={{ ...input, flex: 2 }} />
       <input value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} style={{ ...input, flex: 1 }} placeholder="City" />
       <input value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} style={{ ...input, width: 70 }} placeholder="ST" />
@@ -125,8 +125,8 @@ function StoreRow({ store, onChanged, onError }) {
   )
 }
 
-const panel = { background: '#fff', border: `1px solid ${X.gray}`, borderRadius: 10, padding: 16 }
-const input = { border: `1px solid ${X.gray}`, borderRadius: 6, padding: '8px 10px', fontSize: 14, fontFamily: FONT.body, background: '#fff' }
-const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: FONT.body }
-const btnGhostTop = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: FONT.body }
-const btnGhost = { background: '#fff', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 6, padding: '8px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
+const panel = { ...CARD, padding: 18 }
+const input = { border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 11px', fontSize: 14, fontFamily: FONT.body, background: '#FFFFFD' }
+const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '9px 16px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: FONT.body }
+const btnGhostTop = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 16px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: FONT.body }
+const btnGhost = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 16px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }

@@ -3,6 +3,11 @@ import { useAuth } from '../context/AuthContext'
 import { COLOR, FONT } from '../lib/theme'
 import logoWhite from '../assets/xpel-white.png'
 
+// =============================================================================
+// The front door. Carbon Black field, the brand's forward-leaning shape
+// system drifting behind a frosted "PPF glass" card — the interface wearing
+// the product. Copy is straight from the 2026 tone-of-voice examples.
+// =============================================================================
 export default function Login() {
   const { signIn } = useAuth()
   const [email, setEmail] = useState('')
@@ -19,17 +24,22 @@ export default function Login() {
 
   return (
     <div style={s.screen}>
-      <form onSubmit={submit} style={s.card}>
+      {/* The angled shape field (Graphic Elements, p.34–35) — blurred through the card */}
+      <div aria-hidden="true" style={{ ...s.shape, top: '12%', left: '14%', width: 220, height: 220, background: 'rgba(253,181,33,0.10)' }} />
+      <div aria-hidden="true" style={{ ...s.shape, top: '30%', left: '30%', width: 130, height: 130, background: 'rgba(231,228,218,0.07)' }} />
+      <div aria-hidden="true" style={{ ...s.shape, bottom: '14%', right: '12%', width: 260, height: 260, background: 'rgba(231,228,218,0.06)' }} />
+      <div aria-hidden="true" style={{ ...s.shape, bottom: '32%', right: '28%', width: 110, height: 110, background: 'rgba(253,181,33,0.07)' }} />
+
+      <form onSubmit={submit} className="x-fade" style={s.card}>
         <img src={logoWhite} alt="XPEL" style={{ width: 190, alignSelf: 'flex-start' }} />
         <div style={s.subtitle}>Dealership Portal</div>
-        {/* Signature element from the 2026 visual system: the forward-leaning
-            shape cluster (Brand Guidelines V1 2026 — Graphic Elements &
-            stationery, pp.34/47). Angle echoes the logo's lean. */}
         <div style={s.motif} aria-hidden="true">
           <div style={{ ...s.chip, background: COLOR.yellow }} />
           <div style={{ ...s.chip, background: COLOR.slate }} />
           <div style={{ ...s.chip, background: COLOR.stone }} />
         </div>
+        <div style={s.tagline}>Dealership solutions. Designed around you.</div>
+
         <label style={s.label}>Email</label>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" style={s.input} required />
         <label style={s.label}>Password</label>
@@ -44,18 +54,38 @@ export default function Login() {
   )
 }
 
-// Dark neutrals are derived from Carbon Black (#141213) — lifted a step for
-// the card and another for borders — so the whole screen sits in the 2026
-// primary palette with XPEL Yellow as the only accent.
 const s = {
-  screen: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLOR.black, fontFamily: FONT.body, padding: 24 },
-  card: { width: '100%', maxWidth: 400, background: '#1C1B1A', border: `1px solid #35332F`, borderRadius: 12, padding: '40px 34px', display: 'flex', flexDirection: 'column' },
+  screen: {
+    minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: COLOR.black, fontFamily: FONT.body, padding: 24,
+    position: 'relative', overflow: 'hidden',
+  },
+  shape: { position: 'absolute', transform: 'skewX(-14deg)', borderRadius: 6 },
+  card: {
+    position: 'relative', width: '100%', maxWidth: 410,
+    background: 'rgba(255,255,253,0.055)',
+    WebkitBackdropFilter: 'blur(26px) saturate(150%)',
+    backdropFilter: 'blur(26px) saturate(150%)',
+    border: '1px solid rgba(255,255,253,0.12)',
+    borderRadius: 22, padding: '42px 36px',
+    boxShadow: '0 30px 90px rgba(0,0,0,0.55)',
+    display: 'flex', flexDirection: 'column',
+  },
   subtitle: { color: COLOR.yellow, fontWeight: FONT.subWeight, fontSize: 13, textTransform: 'uppercase', letterSpacing: FONT.subtitleSpacing, marginTop: 12 },
-  motif: { display: 'flex', gap: 5, marginTop: 16, marginBottom: 10 },
+  motif: { display: 'flex', gap: 5, marginTop: 16 },
   chip: { width: 15, height: 15, transform: 'skewX(-14deg)' },
-  label: { color: COLOR.gray, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginBottom: 6, marginTop: 14 },
-  input: { background: COLOR.black, border: `1px solid #35332F`, borderRadius: 8, padding: '12px 13px', color: COLOR.white, fontSize: 15, fontFamily: FONT.body, outline: 'none' },
-  button: { marginTop: 28, background: COLOR.yellow, color: COLOR.black, border: 'none', borderRadius: 8, padding: '14px 16px', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontFamily: FONT.body, cursor: 'pointer' },
+  tagline: { color: 'rgba(255,255,253,0.55)', fontSize: 13, marginTop: 12, marginBottom: 8, lineHeight: 1.5 },
+  label: { color: 'rgba(255,255,253,0.75)', fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginBottom: 6, marginTop: 16 },
+  input: {
+    background: 'rgba(20,18,19,0.55)', border: '1px solid rgba(255,255,253,0.16)',
+    borderRadius: 12, padding: '13px 14px', color: COLOR.white, fontSize: 15,
+    fontFamily: FONT.body,
+  },
+  button: {
+    marginTop: 28, background: COLOR.yellow, color: COLOR.black, border: 'none',
+    borderRadius: 999, padding: '15px 16px', fontSize: 13, fontWeight: 800,
+    textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontFamily: FONT.body, cursor: 'pointer',
+  },
   error: { marginTop: 16, color: '#E4837F', fontSize: 13.5 },
-  foot: { marginTop: 22, color: '#8C8983', fontSize: 11.5, textAlign: 'center', letterSpacing: '0.03em' },
+  foot: { marginTop: 22, color: 'rgba(255,255,253,0.35)', fontSize: 11.5, textAlign: 'center', letterSpacing: '0.03em' },
 }

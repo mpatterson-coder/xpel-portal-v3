@@ -5,12 +5,69 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>XPEL Dealership Portal</title>
-    <!-- Typography per Brand Guidelines V1 2026 (p.25): brand faces are
-         Mattone / Neue Haas Grotesk; the guidelines' approved web-friendly
-         substitutes are Arial Bold / Arial Regular — no font download needed. -->
+    <!-- =====================================================================
+         Global interaction layer — the "feel" of the portal.
+         Design system: XPEL Brand Guidelines V1 2026 (Automotive palette,
+         forward-leaning geometry, PPF translucency) executed with Apple-style
+         interaction physics: soft elevation, frosted surfaces, focus rings,
+         and 150–300ms easing on everything a hand touches.
+         Typography per p.25: Arial Bold / Regular (approved substitutes for
+         Mattone / Neue Haas Grotesk) — zero external font downloads.
+    ====================================================================== -->
     <style>
-      html, body { margin:0; padding:0; background:#F6F5F1; -webkit-font-smoothing:antialiased; font-family:Arial, Helvetica, sans-serif; }
-      #root { min-height:100vh; }
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; padding: 0;
+        background: #F6F5F1; color: #141213;
+        font-family: Arial, Helvetica, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        font-variant-numeric: tabular-nums; /* money & counts align like an instrument cluster */
+      }
+      #root { min-height: 100vh; }
+      h1, h2, h3 { letter-spacing: -0.015em; } /* tight display tracking, echoing Mattone */
+
+      ::selection { background: #FDB521; color: #141213; }
+
+      /* Everything a hand touches responds. */
+      button {
+        transition: transform .16s ease, filter .16s ease, background-color .16s ease,
+                    color .16s ease, box-shadow .16s ease, border-color .16s ease, opacity .16s ease;
+      }
+      button:hover:not(:disabled) { filter: brightness(1.045); }
+      button:active:not(:disabled) { transform: scale(.98); }
+
+      input, select, textarea {
+        transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+        accent-color: #FDB521;
+      }
+      input:focus, select:focus, textarea:focus {
+        outline: none;
+        border-color: #141213 !important;
+        box-shadow: 0 0 0 4px rgba(253, 181, 33, .22);
+      }
+      input::placeholder, textarea::placeholder { color: #A9A59C; }
+      select { cursor: pointer; }
+
+      /* Content arrives, it doesn't pop. */
+      @keyframes x-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      .x-fade { animation: x-fade-up .3s cubic-bezier(.2, .7, .3, 1) both; }
+
+      @keyframes x-spin { to { transform: rotate(360deg); } }
+      .x-spinner {
+        display: inline-block; width: 22px; height: 22px; border-radius: 50%;
+        border: 2.5px solid #E7E4DA; border-top-color: #FDB521;
+        animation: x-spin .7s linear infinite;
+      }
+
+      /* Clickable cards lift toward the hand. */
+      .x-lift { transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
+      .x-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(20,18,19,.08), 0 20px 44px rgba(20,18,19,.12) !important; }
+
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb { background: #D9D5CA; border-radius: 8px; border: 2px solid #F6F5F1; }
+      ::-webkit-scrollbar-thumb:hover { background: #C7C2B4; }
     </style>
   </head>
   <body>

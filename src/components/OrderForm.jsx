@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { getCatalog, createOrder } from '../lib/db'
 import { decodeVinFull, isLikelyVin } from '../lib/vin'
 import { usePersistentState } from '../lib/uiState'
-import { COLOR as X, FONT, money } from '../lib/theme'
+import { COLOR as X, FONT, CARD, money } from '../lib/theme'
 
 const SIZES = ['standard', 'midsize', 'fullsize']
 const EMPTY_VEH = { year: '', make: '', model: '', trim: '', size: '' }
@@ -134,7 +134,7 @@ export default function OrderForm({ onCreated }) {
 
   return (
     <div style={card}>
-      <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: FONT.headingWeight }}>New Protection Order</h2>
+      <h2 style={{ margin: '0 0 4px', fontSize: 21, fontWeight: FONT.headingWeight }}>New Protection Order</h2>
 
       <Label>Vehicle</Label>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -194,7 +194,7 @@ export default function OrderForm({ onCreated }) {
             {products.map((p) => {
               const inCart = lines.find((l) => l.product.id === p.id)
               return (
-                <button key={p.id} onClick={() => toggleLine(p)}
+                <button key={p.id} onClick={() => toggleLine(p)} className="x-lift"
                   style={{ ...catItem, ...(inCart ? catItemOn : {}) }} title={inCart ? 'Click to remove from this order' : (p.description || '')}>
                   <div style={{ minWidth: 0 }}>
                     {p.tier && <span style={tierTag}>{p.tier}</span>}
@@ -248,19 +248,22 @@ export default function OrderForm({ onCreated }) {
 }
 
 const Label = ({ children, noTop }) => (
-  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: FONT.subWeight, margin: noTop ? '0 0 6px' : '16px 0 6px' }}>{children}</div>
+  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: FONT.subWeight, margin: noTop ? '0 0 6px' : '20px 0 8px' }}>
+    <span aria-hidden="true" style={{ width: 7, height: 7, background: X.yellow, transform: 'skewX(-14deg)', flexShrink: 0 }} />
+    {children}
+  </div>
 )
 
-const card = { background: X.panel, border: `1px solid ${X.line}`, borderRadius: 12, padding: 24, maxWidth: 780, fontFamily: FONT.body }
-const input = { width: '100%', boxSizing: 'border-box', border: `1px solid ${X.gray}`, borderRadius: 8, padding: '10px 11px', fontSize: 14, fontFamily: FONT.body }
+const card = { ...CARD, padding: 28, maxWidth: 780, fontFamily: FONT.body }
+const input = { width: '100%', boxSizing: 'border-box', background: '#FFFFFD', border: `1px solid ${X.gray}`, borderRadius: 10, padding: '11px 12px', fontSize: 14, fontFamily: FONT.body }
 const fieldLbl = { fontSize: 10.5, color: X.slate, marginBottom: 4 }
-const pill = { flex: 1, textTransform: 'capitalize', border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 8, padding: '10px', cursor: 'pointer', fontFamily: FONT.body, fontWeight: 500 }
+const pill = { flex: 1, textTransform: 'capitalize', border: `1px solid ${X.gray}`, background: '#FFFFFD', borderRadius: 10, padding: '11px 10px', cursor: 'pointer', fontFamily: FONT.body, fontWeight: 600 }
 const pillOn = { background: X.black, color: '#fff', borderColor: X.black }
-const catItemOn = { borderColor: '#FDB521', borderWidth: 2, background: '#FFFBEF', boxShadow: '0 0 0 1px #FDB52133' }
+const catItemOn = { borderColor: '#FDB521', background: '#FFFBEF', boxShadow: '0 0 0 3px rgba(253,181,33,0.28)' }
 const inCartTag = { marginTop: 3, fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#000', background: '#FDB521', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }
-const catItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', border: `1px solid ${X.line}`, borderRadius: 10, padding: '10px 12px', background: '#fff', cursor: 'pointer', fontFamily: FONT.body }
+const catItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', border: '1px solid rgba(20,18,19,0.08)', borderRadius: 12, padding: '11px 13px', background: '#FFFFFD', cursor: 'pointer', fontFamily: FONT.body }
 const tierTag = { display: 'inline-block', fontSize: 10, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: 700, color: X.black, background: X.yellow, borderRadius: 4, padding: '1px 7px', marginBottom: 4 }
 const desc = { fontSize: 11.5, color: X.slate, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }
-const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 8, padding: '13px 18px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body, fontSize: 13 }
-const btnDark = { background: X.black, color: '#fff', border: 'none', borderRadius: 8, padding: '0 18px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT.body }
+const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 999, padding: '14px 26px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body, fontSize: 13 }
+const btnDark = { background: X.black, color: '#fff', border: 'none', borderRadius: 10, padding: '0 20px', fontWeight: 700, cursor: 'pointer', fontFamily: FONT.body }
 const xBtn = { border: 'none', background: 'transparent', color: X.red, fontSize: 20, cursor: 'pointer', lineHeight: 1 }
