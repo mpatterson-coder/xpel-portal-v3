@@ -5,12 +5,13 @@ import UsersAdmin from './UsersAdmin'
 import NetworkAdmin from './NetworkAdmin'
 import CatalogAdmin from './CatalogAdmin'
 import OrdersList from './OrdersList'
+import PerformanceDashboard from './PerformanceDashboard'
 import { usePersistentState } from '../lib/uiState'
 import { COLOR as X, FONT, money as fm } from '../lib/theme'
 
 const money = (n) => fm(n, 0)
 const STATUSES = ['submitted', 'in_review', 'approved', 'in_progress', 'completed', 'cancelled']
-const TABS = { overview: 'Overview', orders: 'Orders', users: 'Users', network: 'Network', catalog: 'Catalog & Pricing' }
+const TABS = { overview: 'Overview', performance: 'Performance', orders: 'Orders', users: 'Users', network: 'Network', catalog: 'Catalog & Pricing' }
 
 // Admin area. The Overview is fully interactive: stat cards and status tiles
 // navigate to the data they represent (Orders view with a preset filter, the
@@ -38,6 +39,7 @@ export default function AdminDashboard() {
         ))}
       </div>
       {tab === 'overview' && <OverviewTab onNavigate={go} />}
+      {tab === 'performance' && <PerformanceDashboard mode="admin" />}
       {tab === 'orders' && <OrdersTab filter={orderFilter} setFilter={setOrderFilter} />}
       {tab === 'users' && <UsersAdmin />}
       {tab === 'network' && <NetworkAdmin />}

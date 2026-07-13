@@ -37,11 +37,15 @@ export default function OrderForm({ onCreated }) {
   const [decoded, setDecoded] = usePersistentState(`xpel.${uid}.order.decoded`, false)
   const [decodeNote, setDecodeNote] = usePersistentState(`xpel.${uid}.order.note`, '')
   const [custRaw, setCust] = usePersistentState(`xpel.${uid}.order.cust`, EMPTY_CUST)
-  const [lines, setLines] = usePersistentState(`xpel.${uid}.order.lines`, [])
+  const [linesRaw, setLines] = usePersistentState(`xpel.${uid}.order.lines`, [])
   // Merge over the defaults so a draft saved by an older version of the app
   // can never be missing a field.
   const veh = { ...EMPTY_VEH, ...vehRaw }
   const cust = { ...EMPTY_CUST, ...custRaw }
+  // Business rule: a vehicle gets AT MOST ONE of each package — nobody orders
+  // two full-body PPF coverages for the same car. Quantity is pinned to 1
+  // (also normalizes any older saved draft that predates this rule).
+  const lines = (linesRaw ?? []).map((l) => ({ ...l, quantity: 1 }))
 
   const [showMargin, setShowMargin] = useState(false) // deliberately NOT persisted: always reopens hidden (safe for customer presentation)
   const [busy, setBusy] = useState(false)
@@ -81,14 +85,12 @@ export default function OrderForm({ onCreated }) {
       : 'Vehicle lookup unavailable — year decoded locally. Enter make, model, trim and size.')
   }
 
-  function addLine(product) {
-    setLines((ls) => {
-      const found = ls.find((l) => l.product.id === product.id)
-      if (found) return ls.map((l) => (l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l))
-      return [...ls, { product, quantity: 1 }]
-    })
+  // Catalog items toggle: click to add, click again to remove (max 1 each).
+  function toggleLine(product) {
+    setLines((ls) => ls.find((l) => l.product.id === product.id)
+      ? ls.filter((l) => l.product.id !== product.id)
+      : [...ls, { product, quantity: 1 }])
   }
-  const setQty = (id, q) => setLines((ls) => ls.map((l) => (l.product.id === id ? { ...l, quantity: Math.max(1, q) } : l)))
   const removeLine = (id) => setLines((ls) => ls.filter((l) => l.product.id !== id))
 
   const totals = useMemo(() => {
@@ -108,7 +110,7 @@ export default function OrderForm({ onCreated }) {
       const first = cust.first.trim()
       const last = cust.last.trim()
       const order = await createOrder(profile, {
-        lines: lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity, unit_price: l.product.effective_price })),
+        lines: lines.map((l) => ({ product_id: l.product.id, quantity: 1, unit_price: l.product.effective_price })),
         customer_first_name: first,
         customer_last_name: last,
         customer_name: `${first} ${last}`.trim(), // combined copy, so every existing screen keeps displaying names
@@ -192,8 +194,8 @@ export default function OrderForm({ onCreated }) {
             {products.map((p) => {
               const inCart = lines.find((l) => l.product.id === p.id)
               return (
-                <button key={p.id} onClick={() => addLine(p)}
-                  style={{ ...catItem, ...(inCart ? catItemOn : {}) }} title={p.description || ''}>
+                <button key={p.id} onClick={() => toggleLine(p)}
+                  style={{ ...catItem, ...(inCart ? catItemOn : {}) }} title={inCart ? 'Click to remove from this order' : (p.description || '')}>
                   <div style={{ minWidth: 0 }}>
                     {p.tier && <span style={tierTag}>{p.tier}</span>}
                     <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
@@ -201,7 +203,7 @@ export default function OrderForm({ onCreated }) {
                   </div>
                   <div style={{ textAlign: 'right', marginLeft: 8 }}>
                     <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{money(p.effective_price)}</div>
-                    {inCart && <div style={inCartTag}>✓ In order{inCart.quantity > 1 ? ` ×${inCart.quantity}` : ''}</div>}
+                    {inCart && <div style={inCartTag}>✓ In order</div>}
                   </div>
                 </button>
               )
@@ -221,9 +223,8 @@ export default function OrderForm({ onCreated }) {
           {lines.map((l) => (
             <div key={l.product.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
               <div style={{ flex: 1, fontSize: 14 }}>{l.product.name}</div>
-              <input type="number" min="1" value={l.quantity} onChange={(e) => setQty(l.product.id, Number(e.target.value))} style={{ ...input, width: 56, padding: '6px 8px' }} />
-              <div style={{ width: 90, textAlign: 'right' }}>{money(l.product.effective_price * l.quantity)}</div>
-              {showMargin && <div style={{ width: 90, textAlign: 'right', color: X.green, fontSize: 13 }}>+{money((l.product.effective_price - l.product.cost) * l.quantity)}</div>}
+              <div style={{ width: 90, textAlign: 'right' }}>{money(l.product.effective_price)}</div>
+              {showMargin && <div style={{ width: 90, textAlign: 'right', color: X.green, fontSize: 13 }}>+{money(l.product.effective_price - l.product.cost)}</div>}
               <button onClick={() => removeLine(l.product.id)} style={xBtn}>×</button>
             </div>
           ))}

@@ -67,7 +67,7 @@ export async function getOrderDetail(orderId) {
   const [{ data: order, error: oErr }, { data: items, error: iErr }, { data: history, error: hErr }] =
     await Promise.all([
       supabase.from('orders').select('*, dealership:dealerships(name)').eq('id', orderId).single(),
-      supabase.from('order_items').select('*, product:products(name, sku)').eq('order_id', orderId),
+      supabase.from('order_items').select('*, product:products(name, sku, cost)').eq('order_id', orderId),
       supabase.from('order_status_history').select('*').eq('order_id', orderId).order('created_at'),
     ])
   if (oErr) throw oErr

@@ -2,16 +2,33 @@ import { useEffect, useState } from 'react'
 import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder } from '../lib/db'
 import { usePersistentState } from '../lib/uiState'
 import { COLOR as X, FONT, STATUS_TONE, money, dateUS } from '../lib/theme'
+import StatusTimeline from './StatusTimeline'
+import TabNav from './TabNav'
+import PerformanceDashboard from './PerformanceDashboard'
 
-// The forward fulfillment path an installer walks an order through.
-const NEXT = { submitted: 'in_review', in_review: 'approved', approved: 'in_progress', in_progress: 'completed' }
+const STATUS_LABELS = {
+  submitted: 'Submitted', in_review: 'In Review', approved: 'Approved',
+  in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled',
+}
 const FILTERS = { active: 'Active', completed: 'Completed', all: 'All' }
 
-// The Installer view: the group's fulfillment queue. RLS scopes getOrders() to
-// the installer's own group automatically (no Lithia orders for a Penske
-// installer, and vice-versa). Installers advance status and need the DAP work
-// order number, which is flagged when missing (matches DPV1).
+// The Installer view: the group's fulfillment queue plus a shop performance
+// dashboard. RLS scopes everything to the installer's own group.
+//
+// MONEY RULE for this whole view: installers see WHOLESALE amounts only (what
+// the shop bills the dealership). The consumer retail price never appears here.
 export default function InstallerDashboard() {
+  const [view, setView] = usePersistentState('xpel.installer.view', 'queue')
+  return (
+    <div style={{ maxWidth: 1000 }}>
+      <TabNav tabs={{ queue: 'Fulfillment Queue', performance: 'Performance' }} value={view} onChange={setView} />
+      {view === 'queue' && <QueueView />}
+      {view === 'performance' && <PerformanceDashboard mode="installer" />}
+    </div>
+  )
+}
+
+function QueueView() {
   const [orders, setOrders] = useState([])
   const [filter, setFilter] = usePersistentState('xpel.installer.filter', 'active')
   const [err, setErr] = useState('')
@@ -26,7 +43,7 @@ export default function InstallerDashboard() {
   })
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: 20 }}>Fulfillment Queue</h2>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -63,12 +80,21 @@ function QueueRow({ order, onChanged }) {
       try { setDetail(await getOrderDetail(order.id)) } catch (e) { setDetail({ error: e.message }) }
     }
   }
-  async function advance(status) {
+
+  // The status control is a dropdown so the shop can move an order BOTH ways —
+  // e.g. pull one back from In Progress to Approved if a bay frees up wrong,
+  // or resurrect a cancelled order. Every change still lands in the history
+  // log (database trigger) and fires the customer/dealer notifications.
+  async function setStatus(status) {
+    if (status === order.status) return
     setBusy(true)
     try { await updateOrderStatus(order.id, status); await onChanged() } finally { setBusy(false) }
   }
 
-  const next = NEXT[order.status]
+  // Wholesale amount for this order (installer's billing view).
+  const wholesale = detail && !detail.error
+    ? detail.items.reduce((s, it) => s + Number(it.product?.cost || 0) * it.quantity, 0)
+    : null
 
   return (
     <div style={{ borderBottom: `1px solid ${X.gray}`, padding: '10px 12px' }}>
@@ -90,20 +116,19 @@ function QueueRow({ order, onChanged }) {
           ? <span style={{ ...flag, color: '#fff', background: X.red }}>DAP&nbsp;#&nbsp;Missing</span>
           : <span style={{ ...flag, color: X.slate, border: `1px solid ${X.gray}` }}>DAP&nbsp;{order.dap_work_order}</span>}
         <Badge status={order.status} />
-        {next && (
-          <button disabled={busy} onClick={() => advance(next)} style={advBtn}>
-            Mark {next.replace('_', ' ')} →
-          </button>
-        )}
+        <select value={order.status} disabled={busy} onChange={(e) => setStatus(e.target.value)} style={statusSel} title="Set order status">
+          {Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
       </div>
 
       {open && (
-        <div style={{ marginTop: 10, padding: 12, background: X.bg, borderRadius: 8 }}>
+        <div style={{ marginTop: 10, padding: 14, background: X.bg, borderRadius: 8 }}>
           {!detail && <div style={{ color: X.slate, fontSize: 13 }}>Loading…</div>}
           {detail?.error && <div style={{ color: X.red, fontSize: 13 }}>{detail.error}</div>}
           {detail && !detail.error && (
             <>
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }}>Customer</div>
+              <StatusTimeline status={order.status} style={{ margin: '4px 0 18px', maxWidth: 560 }} />
+              <div style={secLbl}>Customer</div>
               <div style={{ fontSize: 14, marginBottom: 14 }}>
                 <div style={{ fontWeight: 600 }}>{order.customer_name || '—'}</div>
                 {(order.customer_phone || order.customer_email) && (
@@ -115,28 +140,29 @@ function QueueRow({ order, onChanged }) {
                   <div style={{ fontSize: 13, color: X.slate }}>Vehicle available for pick-up: {dateUS(order.pickup_date)}</div>
                 )}
               </div>
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }}>DAP work order #</div>
+              <div style={secLbl}>DAP work order #</div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 340 }}>
                 <input value={dapDraft} onChange={(e) => setDapDraft(e.target.value)} placeholder="Enter DAP work order number"
                   style={{ flex: 1, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '8px 10px', fontSize: 14, fontFamily: FONT.body }} />
                 <button disabled={busy || (dapDraft.trim() === (order.dap_work_order || ''))} onClick={saveDap}
-                  style={{ ...advBtn, opacity: busy || (dapDraft.trim() === (order.dap_work_order || '')) ? 0.5 : 1 }}>Save</button>
+                  style={{ ...saveBtn, opacity: busy || (dapDraft.trim() === (order.dap_work_order || '')) ? 0.5 : 1 }}>Save</button>
               </div>
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }}>Coverage</div>
+              <div style={secLbl}>Coverage — wholesale (billed to dealership)</div>
               {detail.items.map((it) => (
                 <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '2px 0' }}>
-                  <span>{it.quantity} × {it.product?.name}</span><span>{money(it.line_total)}</span>
+                  <span>{it.quantity} × {it.product?.name}</span>
+                  <span>{money(Number(it.product?.cost || 0) * it.quantity)}</span>
                 </div>
               ))}
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, margin: '12px 0 6px' }}>Status history</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, padding: '6px 0', borderTop: `1px solid ${X.stone}`, marginTop: 4 }}>
+                <span>Wholesale total</span><span>{money(wholesale)}</span>
+              </div>
+              <div style={{ ...secLbl, margin: '12px 0 6px' }}>Status history</div>
               {detail.history.map((h) => (
                 <div key={h.id} style={{ fontSize: 12, color: X.slate, fontFamily: FONT.body }}>
-                  {new Date(h.created_at).toLocaleString()} — {h.status.replace('_', ' ')}
+                  {new Date(h.created_at).toLocaleString()} — {STATUS_LABELS[h.status] ?? h.status}
                 </div>
               ))}
-              {order.status !== 'cancelled' && order.status !== 'completed' && (
-                <button disabled={busy} onClick={() => advance('cancelled')} style={cancelLink}>Cancel order</button>
-              )}
             </>
           )}
         </div>
@@ -150,8 +176,9 @@ function Badge({ status }) {
   return <span style={{ fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: t.fg, background: t.bg, borderRadius: 4, padding: '3px 8px', width: 92, textAlign: 'center' }}>{(status || '').replace('_', ' ')}</span>
 }
 
+const secLbl = { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6 }
 const tab = { border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
 const tabOn = { background: X.black, color: '#fff', borderColor: X.black }
 const flag = { fontFamily: FONT.body, fontSize: 11, borderRadius: 4, padding: '3px 8px' }
-const advBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '7px 12px', fontWeight: 700, fontSize: 12, textTransform: 'capitalize', cursor: 'pointer', fontFamily: FONT.body }
-const cancelLink = { marginTop: 12, background: 'transparent', border: 'none', color: X.red, fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }
+const statusSel = { border: `1px solid ${X.gray}`, background: '#fff', borderRadius: 6, padding: '7px 8px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FONT.body, color: X.black }
+const saveBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 6, padding: '7px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
