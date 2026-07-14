@@ -62,6 +62,7 @@ create table dealerships (
   state       text,
   -- Which XPEL Authorized Dealer services this rooftop (assigned by admin).
   authorized_dealer_id uuid references authorized_dealers(id) on delete set null,
+  -- program_id added below via ALTER (programs table is created later in this file).
   created_at  timestamptz not null default now()
 );
 
@@ -208,12 +209,18 @@ returns uuid language sql stable security definer set search_path = public as $$
   select authorized_dealer_id from profiles where id = auth.uid()
 $$;
 
+create or replace function public.current_user_program_id()
+returns uuid language sql stable security definer set search_path = public as $$
+  select program_id from dealerships where id = public.current_user_dealership_id()
+$$;
+
 create or replace function public.dealership_can_see_product(p_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
-    select 1 from dealership_products dp
-    where dp.product_id = p_id
-      and dp.dealership_id = public.current_user_dealership_id()
+    select 1 from program_products pp
+    join dealerships d on d.program_id = pp.program_id
+    where pp.product_id = p_id
+      and d.id = public.current_user_dealership_id()
   )
   or exists (
     select 1 from order_items oi
@@ -226,8 +233,9 @@ $$;
 create or replace function public.product_assigned_to_dealership(p_id uuid, d_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
-    select 1 from dealership_products dp
-    where dp.product_id = p_id and dp.dealership_id = d_id
+    select 1 from program_products pp
+    join dealerships d on d.program_id = pp.program_id
+    where pp.product_id = p_id and d.id = d_id
   )
 $$;
 
@@ -316,7 +324,9 @@ create trigger orders_log_status
 
 alter table dealership_groups   enable row level security;
 alter table authorized_dealers  enable row level security;
-alter table dealership_products enable row level security;
+alter table programs           enable row level security;
+alter table program_products   enable row level security;
+alter table dealership_pricing enable row level security;
 alter table dealerships         enable row level security;
 alter table profiles            enable row level security;
 alter table products            enable row level security;
@@ -384,20 +394,25 @@ create policy products_admin_write on products for all
   using (public.is_admin()) with check (public.is_admin());
 
 
--- ---- dealership_products (per-rooftop package menu) ---------------------------
-create policy dp_select on dealership_products for select using (
-  public.is_admin() or dealership_id = public.current_user_dealership_id()
+-- ---- programs & program_products (linked package sets) ------------------------
+create policy programs_select on programs for select using (
+  public.is_admin() or id = public.current_user_program_id()
 );
-create policy dp_admin_write on dealership_products for all
+create policy programs_admin_write on programs for all
+  using (public.is_admin()) with check (public.is_admin());
+
+create policy program_products_select on program_products for select using (
+  public.is_admin() or program_id = public.current_user_program_id()
+);
+create policy program_products_admin_write on program_products for all
   using (public.is_admin()) with check (public.is_admin());
 
 
--- ---- group_pricing (private per group) -------------------------------------
--- THIS is the pricing wall: you only see your own group's overrides.
-create policy pricing_select on group_pricing for select using (
-  public.is_admin() or group_id = public.current_user_group_id()
+-- ---- dealership_pricing (THE pricing wall: each store sees only its own) -------
+create policy dealership_pricing_select on dealership_pricing for select using (
+  public.is_admin() or dealership_id = public.current_user_dealership_id()
 );
-create policy pricing_admin_write on group_pricing for all
+create policy dealership_pricing_admin_write on dealership_pricing for all
   using (public.is_admin()) with check (public.is_admin());
 
 

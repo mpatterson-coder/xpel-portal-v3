@@ -134,29 +134,94 @@ export async function deleteDealership(id) {
   }
 }
 
-// ---- Per-rooftop package menus --------------------------------------------------
+// ---- Protection Programs (linked package sets) -----------------------------------
 
-export async function getAllDealershipProducts() {
-  const { data, error } = await supabase
-    .from('dealership_products')
-    .select('id, dealership_id, product_id')
+export async function getAllPrograms() {
+  const { data, error } = await supabase.from('programs').select('*').order('name')
   if (error) throw error
   return data ?? []
 }
 
-export async function assignPackage(dealership_id, product_id) {
-  const { error } = await supabase
-    .from('dealership_products')
-    .upsert({ dealership_id, product_id }, { onConflict: 'dealership_id,product_id' })
+export async function createProgram(name) {
+  const { data, error } = await supabase.from('programs').insert({ name }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function renameProgram(id, name) {
+  const { error } = await supabase.from('programs').update({ name }).eq('id', id)
   if (error) throw error
 }
 
-export async function unassignPackage(dealership_id, product_id) {
+// Deleting a program leaves its rooftops with NO program (empty menus) until
+// they're pointed at another one — the UI warns before allowing it.
+export async function deleteProgram(id) {
+  const { error } = await supabase.from('programs').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Copy a program (name + full package set) as a starting point for a variant.
+export async function duplicateProgram(id, newName) {
+  const prog = await createProgram(newName)
+  const { data: items, error } = await supabase
+    .from('program_products').select('product_id').eq('program_id', id)
+  if (error) throw error
+  if (items?.length) {
+    const { error: insErr } = await supabase
+      .from('program_products')
+      .insert(items.map((i) => ({ program_id: prog.id, product_id: i.product_id })))
+    if (insErr) throw insErr
+  }
+  return prog
+}
+
+export async function getAllProgramProducts() {
+  const { data, error } = await supabase
+    .from('program_products').select('id, program_id, product_id')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function addProgramProduct(program_id, product_id) {
   const { error } = await supabase
-    .from('dealership_products')
-    .delete()
-    .eq('dealership_id', dealership_id)
-    .eq('product_id', product_id)
+    .from('program_products')
+    .upsert({ program_id, product_id }, { onConflict: 'program_id,product_id' })
+  if (error) throw error
+}
+
+export async function removeProgramProduct(program_id, product_id) {
+  const { error } = await supabase
+    .from('program_products')
+    .delete().eq('program_id', program_id).eq('product_id', product_id)
+  if (error) throw error
+}
+
+export async function setDealershipProgram(dealership_id, program_id) {
+  const { error } = await supabase
+    .from('dealerships').update({ program_id }).eq('id', dealership_id)
+  if (error) throw error
+}
+
+// ---- Per-rooftop pricing ----------------------------------------------------------
+
+export async function getAllDealershipPricing() {
+  const { data, error } = await supabase
+    .from('dealership_pricing').select('id, dealership_id, product_id, unit_price')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function setDealershipPrice(dealership_id, product_id, unit_price) {
+  const { error } = await supabase
+    .from('dealership_pricing')
+    .upsert({ dealership_id, product_id, unit_price }, { onConflict: 'dealership_id,product_id' })
+  if (error) throw error
+}
+
+export async function clearDealershipPrice(dealership_id, product_id) {
+  const { error } = await supabase
+    .from('dealership_pricing')
+    .delete().eq('dealership_id', dealership_id).eq('product_id', product_id)
   if (error) throw error
 }
 
@@ -183,26 +248,4 @@ export async function updateProduct(id, patch) {
   if (error) throw error
 }
 
-// Per-group negotiated pricing (the private overrides).
-export async function getAllGroupPricing() {
-  const { data, error } = await supabase
-    .from('group_pricing')
-    .select('id, group_id, product_id, unit_price, group:dealership_groups(name), product:products(name, sku)')
-  if (error) throw error
-  return data ?? []
-}
 
-export async function upsertGroupPrice({ group_id, product_id, unit_price }) {
-  const { data, error } = await supabase
-    .from('group_pricing')
-    .upsert({ group_id, product_id, unit_price }, { onConflict: 'group_id,product_id' })
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function deleteGroupPrice(id) {
-  const { error } = await supabase.from('group_pricing').delete().eq('id', id)
-  if (error) throw error
-}

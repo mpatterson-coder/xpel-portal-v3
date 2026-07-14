@@ -14,33 +14,28 @@ import { supabase } from './supabaseClient'
 
 // ---- Catalog ----------------------------------------------------------------
 
-// Returns the product catalog with each product's EFFECTIVE price for the
-// current user's group: a private group override if one exists, otherwise the
-// base list price. (group_pricing is RLS-protected, so a user only ever sees
-// their own group's overrides.)
-// The catalog a DEALERSHIP user can order from: ONLY the packages assigned to
-// their rooftop (the admin curates each store's menu in Network -> Packages).
-// Group price overrides still apply on top. This deliberately queries the
-// assignment table rather than products: a package a store ordered in the
-// past but is no longer assigned stays visible in its history and reports,
-// but must NOT reappear here as orderable.
+// The catalog a DEALERSHIP user can order from: the packages in their
+// rooftop's PROGRAM, priced with this store's overrides on top of the base
+// list price. RLS scopes both queries to the logged-in store automatically.
+// Packages the store ordered historically but that left its program stay
+// visible in reports — they just never reappear here as orderable.
 export async function getCatalog() {
-  const [{ data: assigned, error: aErr }, { data: overrides, error: oErr }] =
+  const [{ data: inProgram, error: aErr }, { data: prices, error: prErr }] =
     await Promise.all([
-      supabase.from('dealership_products').select('product:products(*)'),
-      supabase.from('group_pricing').select('product_id, unit_price'),
+      supabase.from('program_products').select('product:products(*)'),
+      supabase.from('dealership_pricing').select('product_id, unit_price'),
     ])
   if (aErr) throw aErr
-  if (oErr) throw oErr
+  if (prErr) throw prErr
 
-  const overrideByProduct = new Map((overrides ?? []).map((o) => [o.product_id, o.unit_price]))
-  return (assigned ?? [])
+  const priceByProduct = new Map((prices ?? []).map((o) => [o.product_id, o.unit_price]))
+  return (inProgram ?? [])
     .map((r) => r.product)
     .filter((p) => p && p.active)
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((p) => ({
       ...p,
-      effective_price: overrideByProduct.has(p.id) ? overrideByProduct.get(p.id) : p.unit_price,
+      effective_price: priceByProduct.has(p.id) ? priceByProduct.get(p.id) : p.unit_price,
     }))
 }
 

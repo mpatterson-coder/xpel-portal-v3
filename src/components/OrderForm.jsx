@@ -187,8 +187,8 @@ export default function OrderForm({ onCreated }) {
       {loadErr && <div style={{ color: X.red, fontSize: 13, marginTop: 12 }}>{loadErr}</div>}
       {catalog !== null && !loadErr && catalog.length === 0 && (
         <div style={{ marginTop: 18, fontSize: 13.5, color: X.slate, lineHeight: 1.55 }}>
-          No packages are assigned to this store yet. Your XPEL administrator curates
-          each store's menu — packages will appear here the moment they're assigned.
+          No program is assigned to this store yet. Your XPEL administrator sets each
+          store's program and pricing — packages appear here the moment it's assigned.
         </div>
       )}
 

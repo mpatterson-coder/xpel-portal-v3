@@ -15,7 +15,7 @@ import { Eyebrow, Sheen, useCountUp } from './ui'
 const money = (n) => fm(n, 0)
 const STATUSES = ['submitted', 'in_review', 'approved', 'in_progress', 'completed', 'cancelled']
 const STATUS_TABS = { all: 'All', submitted: 'Submitted', in_review: 'In Review', approved: 'Approved', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled' }
-const TABS = { overview: 'Overview', performance: 'Performance', orders: 'Orders', users: 'Users', network: 'Network', dealers: 'Authorized Dealers', catalog: 'Catalog & Pricing' }
+const TABS = { overview: 'Overview', performance: 'Performance', orders: 'Orders', users: 'Users', network: 'Network', dealers: 'Authorized Dealers', catalog: 'Catalog & Programs' }
 
 // Admin area. The Overview is fully interactive: stat cards and status tiles
 // navigate to the data they represent (Orders view with a preset filter, the

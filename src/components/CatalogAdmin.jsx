@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getGroups } from '../lib/db'
-import { getAllProducts, createProduct, updateProduct, getAllGroupPricing, upsertGroupPrice, deleteGroupPrice } from '../lib/adminDb'
+import { getAllProducts, createProduct, updateProduct } from '../lib/adminDb'
 import { COLOR as X, FONT, CARD, money } from '../lib/theme'
+import ProgramsAdmin from './ProgramsAdmin'
 
 // Full-autonomy catalog management. EVERY field of every offering is editable
 // in-app: name, category (free text — creates new order-form sections
@@ -9,15 +9,13 @@ import { COLOR as X, FONT, CARD, money } from '../lib/theme'
 // active/retired status. Nothing is stock or locked.
 export default function CatalogAdmin() {
   const [products, setProducts] = useState([])
-  const [groups, setGroups] = useState([])
-  const [overrides, setOverrides] = useState([])
   const [err, setErr] = useState('')
   const [adding, setAdding] = useState(false)
   const [openId, setOpenId] = useState(null)
 
   const load = () =>
-    Promise.all([getAllProducts(), getGroups(), getAllGroupPricing()])
-      .then(([p, g, o]) => { setProducts(p); setGroups(g); setOverrides(o) })
+    getAllProducts()
+      .then(setProducts)
       .catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
 
@@ -26,7 +24,7 @@ export default function CatalogAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 19, fontWeight: FONT.headingWeight }}>Catalog &amp; Pricing</h3>
+        <h3 style={{ margin: 0, fontSize: 19, fontWeight: FONT.headingWeight }}>Catalog &amp; Programs</h3>
         <button style={btnPrimary} onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : '+ Add Offering'}</button>
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
@@ -63,7 +61,7 @@ export default function CatalogAdmin() {
         ))}
       </div>
 
-      <GroupPricing groups={groups} products={products} overrides={overrides} onChanged={load} onError={setErr} />
+      <ProgramsAdmin products={products} />
     </div>
   )
 }
@@ -135,47 +133,6 @@ function ProductEditor({ product, categories, onSave, onToggleActive, onError, i
           </button>
         )}
       </div>
-    </div>
-  )
-}
-
-function GroupPricing({ groups, products, overrides, onChanged, onError }) {
-  const [f, setF] = useState({ group_id: '', product_id: '', unit_price: '' })
-  const ready = f.group_id && f.product_id && f.unit_price !== ''
-
-  async function add() {
-    try {
-      await upsertGroupPrice({ group_id: f.group_id, product_id: f.product_id, unit_price: Number(f.unit_price) })
-      setF({ group_id: '', product_id: '', unit_price: '' }); onChanged()
-    } catch (e) { onError(e.message) }
-  }
-
-  return (
-    <div style={{ ...panel, marginTop: 16 }}>
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>Negotiated Group Pricing</div>
-      <div style={{ fontSize: 12.5, color: X.slate, marginBottom: 10 }}>
-        Private per-group prices. A group only ever sees its own negotiated price; all others see the list price.
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-        <select value={f.group_id} onChange={(e) => setF({ ...f, group_id: e.target.value })} style={{ ...input, flex: 1 }}>
-          <option value="">Select group…</option>
-          {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-        <select value={f.product_id} onChange={(e) => setF({ ...f, product_id: e.target.value })} style={{ ...input, flex: 2 }}>
-          <option value="">Select offering…</option>
-          {products.filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name} — list {money(p.unit_price)}</option>)}
-        </select>
-        <input placeholder="Negotiated price" type="number" value={f.unit_price} onChange={(e) => setF({ ...f, unit_price: e.target.value })} style={{ ...input, width: 150 }} />
-        <button style={{ ...btnPrimary, opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={add}>Set Price</button>
-      </div>
-      {overrides.map((o) => (
-        <div key={o.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '6px 0', borderTop: `1px solid ${X.line}`, fontSize: 14 }}>
-          <span style={{ flex: 1 }}><b>{o.group?.name}</b> — {o.product?.name}</span>
-          <span style={{ fontWeight: 700 }}>{money(o.unit_price)}</span>
-          <button style={{ ...btnGhost, color: X.red, borderColor: X.red }} onClick={async () => { try { await deleteGroupPrice(o.id); onChanged() } catch (e) { onError(e.message) } }}>Remove</button>
-        </div>
-      ))}
-      {overrides.length === 0 && <div style={{ fontSize: 13, color: X.slate }}>No negotiated prices set.</div>}
     </div>
   )
 }
