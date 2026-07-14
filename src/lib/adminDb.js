@@ -134,6 +134,32 @@ export async function deleteDealership(id) {
   }
 }
 
+// ---- Per-rooftop package menus --------------------------------------------------
+
+export async function getAllDealershipProducts() {
+  const { data, error } = await supabase
+    .from('dealership_products')
+    .select('id, dealership_id, product_id')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function assignPackage(dealership_id, product_id) {
+  const { error } = await supabase
+    .from('dealership_products')
+    .upsert({ dealership_id, product_id }, { onConflict: 'dealership_id,product_id' })
+  if (error) throw error
+}
+
+export async function unassignPackage(dealership_id, product_id) {
+  const { error } = await supabase
+    .from('dealership_products')
+    .delete()
+    .eq('dealership_id', dealership_id)
+    .eq('product_id', product_id)
+  if (error) throw error
+}
+
 // ---- Catalog & pricing --------------------------------------------------------
 
 export async function getAllProducts() {

@@ -208,6 +208,29 @@ returns uuid language sql stable security definer set search_path = public as $$
   select authorized_dealer_id from profiles where id = auth.uid()
 $$;
 
+create or replace function public.dealership_can_see_product(p_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from dealership_products dp
+    where dp.product_id = p_id
+      and dp.dealership_id = public.current_user_dealership_id()
+  )
+  or exists (
+    select 1 from order_items oi
+    join orders o on o.id = oi.order_id
+    where oi.product_id = p_id
+      and o.dealership_id = public.current_user_dealership_id()
+  )
+$$;
+
+create or replace function public.product_assigned_to_dealership(p_id uuid, d_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from dealership_products dp
+    where dp.product_id = p_id and dp.dealership_id = d_id
+  )
+$$;
+
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from profiles where id = auth.uid() and role = 'admin')
@@ -293,6 +316,7 @@ create trigger orders_log_status
 
 alter table dealership_groups   enable row level security;
 alter table authorized_dealers  enable row level security;
+alter table dealership_products enable row level security;
 alter table dealerships         enable row level security;
 alter table profiles            enable row level security;
 alter table products            enable row level security;
@@ -351,8 +375,20 @@ create policy dealerships_admin_write on dealerships for all
 
 
 -- ---- products (shared catalog) ---------------------------------------------
-create policy products_select on products for select using (auth.uid() is not null);
+create policy products_select on products for select using (
+  public.is_admin()
+  or public.current_user_role() = 'installer'
+  or (public.current_user_role() = 'dealership' and public.dealership_can_see_product(id))
+);
 create policy products_admin_write on products for all
+  using (public.is_admin()) with check (public.is_admin());
+
+
+-- ---- dealership_products (per-rooftop package menu) ---------------------------
+create policy dp_select on dealership_products for select using (
+  public.is_admin() or dealership_id = public.current_user_dealership_id()
+);
+create policy dp_admin_write on dealership_products for all
   using (public.is_admin()) with check (public.is_admin());
 
 
@@ -422,6 +458,7 @@ create policy order_items_insert on order_items for insert with check (
     where o.id = order_items.order_id
       and o.created_by = auth.uid()
       and public.current_user_role() = 'dealership'
+      and public.product_assigned_to_dealership(order_items.product_id, o.dealership_id)
   )
 );
 

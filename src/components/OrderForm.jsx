@@ -28,7 +28,7 @@ function todayStr() {
 // the signed-in user so one person's draft never appears for another.
 export default function OrderForm({ onCreated }) {
   const { profile } = useAuth()
-  const [catalog, setCatalog] = useState([])
+  const [catalog, setCatalog] = useState(null) // null = still loading
   const [loadErr, setLoadErr] = useState('')
 
   const uid = profile?.id || 'anon'
@@ -56,7 +56,7 @@ export default function OrderForm({ onCreated }) {
   // Dynamic category grouping — the admin's catalog drives the layout.
   const byCategory = useMemo(() => {
     const map = new Map()
-    for (const p of catalog) {
+    for (const p of (catalog ?? [])) {
       const key = p.category || 'Other'
       if (!map.has(key)) map.set(key, [])
       map.get(key).push(p)
@@ -185,6 +185,12 @@ export default function OrderForm({ onCreated }) {
       </div>
 
       {loadErr && <div style={{ color: X.red, fontSize: 13, marginTop: 12 }}>{loadErr}</div>}
+      {catalog !== null && !loadErr && catalog.length === 0 && (
+        <div style={{ marginTop: 18, fontSize: 13.5, color: X.slate, lineHeight: 1.55 }}>
+          No packages are assigned to this store yet. Your XPEL administrator curates
+          each store's menu — packages will appear here the moment they're assigned.
+        </div>
+      )}
 
       {/* Catalog — one section per category, entirely driven by admin data */}
       {byCategory.map(([category, products]) => (

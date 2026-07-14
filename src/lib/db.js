@@ -18,20 +18,30 @@ import { supabase } from './supabaseClient'
 // current user's group: a private group override if one exists, otherwise the
 // base list price. (group_pricing is RLS-protected, so a user only ever sees
 // their own group's overrides.)
+// The catalog a DEALERSHIP user can order from: ONLY the packages assigned to
+// their rooftop (the admin curates each store's menu in Network -> Packages).
+// Group price overrides still apply on top. This deliberately queries the
+// assignment table rather than products: a package a store ordered in the
+// past but is no longer assigned stays visible in its history and reports,
+// but must NOT reappear here as orderable.
 export async function getCatalog() {
-  const [{ data: products, error: pErr }, { data: overrides, error: oErr }] =
+  const [{ data: assigned, error: aErr }, { data: overrides, error: oErr }] =
     await Promise.all([
-      supabase.from('products').select('*').eq('active', true).order('name'),
+      supabase.from('dealership_products').select('product:products(*)'),
       supabase.from('group_pricing').select('product_id, unit_price'),
     ])
-  if (pErr) throw pErr
+  if (aErr) throw aErr
   if (oErr) throw oErr
 
   const overrideByProduct = new Map((overrides ?? []).map((o) => [o.product_id, o.unit_price]))
-  return (products ?? []).map((p) => ({
-    ...p,
-    effective_price: overrideByProduct.has(p.id) ? overrideByProduct.get(p.id) : p.unit_price,
-  }))
+  return (assigned ?? [])
+    .map((r) => r.product)
+    .filter((p) => p && p.active)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((p) => ({
+      ...p,
+      effective_price: overrideByProduct.has(p.id) ? overrideByProduct.get(p.id) : p.unit_price,
+    }))
 }
 
 // ---- Dealership network -----------------------------------------------------

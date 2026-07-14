@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react'
 import { getGroups, getDealerships, getAuthorizedDealers } from '../lib/db'
-import { createGroup, renameGroup, createDealership, updateDealership, deleteDealership } from '../lib/adminDb'
+import { createGroup, renameGroup, createDealership, updateDealership, deleteDealership, getAllProducts, getAllDealershipProducts, assignPackage, unassignPackage } from '../lib/adminDb'
 
-import { COLOR as X, FONT, CARD } from '../lib/theme'
+import { COLOR as X, FONT, CARD, money } from '../lib/theme'
 
 export default function NetworkAdmin() {
   const [groups, setGroups] = useState([])
   const [stores, setStores] = useState([])
   const [dealers, setDealers] = useState([])
+  const [products, setProducts] = useState([])
+  const [assignments, setAssignments] = useState([])
   const [err, setErr] = useState('')
   const [newGroup, setNewGroup] = useState('')
   const [indie, setIndie] = useState(null) // {name, city, state} when adding an independent rooftop
 
   const load = () =>
-    Promise.all([getGroups(), getDealerships(), getAuthorizedDealers()])
-      .then(([g, d, ad]) => { setGroups(g); setStores(d); setDealers(ad) })
+    Promise.all([getGroups(), getDealerships(), getAuthorizedDealers(), getAllProducts(), getAllDealershipProducts()])
+      .then(([g, d, ad, pr, asn]) => { setGroups(g); setStores(d); setDealers(ad); setProducts(pr); setAssignments(asn) })
       .catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
 
@@ -59,13 +61,13 @@ export default function NetworkAdmin() {
         </div>
       )}
       {groups.map((g) => (
-        <GroupCard key={g.id} group={g} stores={stores.filter((s) => s.group_id === g.id)} dealers={dealers} onChanged={load} onError={setErr} />
+        <GroupCard key={g.id} group={g} stores={stores.filter((s) => s.group_id === g.id)} dealers={dealers} products={products} assignments={assignments} onChanged={load} onError={setErr} />
       ))}
     </div>
   )
 }
 
-function GroupCard({ group, stores, dealers, onChanged, onError }) {
+function GroupCard({ group, stores, dealers, products, assignments, onChanged, onError }) {
   const [name, setName] = useState(group.name)
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ name: '', city: '', state: '' })
@@ -97,14 +99,18 @@ function GroupCard({ group, stores, dealers, onChanged, onError }) {
           <button style={{ ...btnPrimary, opacity: f.name.trim() ? 1 : 0.5 }} disabled={!f.name.trim()} onClick={addStore}>Add</button>
         </div>
       )}
-      {stores.map((s) => <StoreRow key={s.id} store={s} dealerName={dealers.find((d) => d.id === s.authorized_dealer_id)?.name} onChanged={onChanged} onError={onError} />)}
+      {stores.map((s) => <StoreRow key={s.id} store={s} dealerName={dealers.find((d) => d.id === s.authorized_dealer_id)?.name} products={products} assignments={assignments} onChanged={onChanged} onError={onError} />)}
     </div>
   )
 }
 
-function StoreRow({ store, dealerName, onChanged, onError }) {
+function StoreRow({ store, dealerName, products, assignments, onChanged, onError }) {
   const [f, setF] = useState({ name: store.name, city: store.city || '', state: store.state || '' })
+  const [showPkgs, setShowPkgs] = useState(false)
   const dirty = f.name !== store.name || f.city !== (store.city || '') || f.state !== (store.state || '')
+  const activeProducts = products.filter((p) => p.active)
+  const assignedIds = new Set(assignments.filter((a) => a.dealership_id === store.id).map((a) => a.product_id))
+  const assignedActiveCount = activeProducts.filter((p) => assignedIds.has(p.id)).length
 
   async function save() {
     try { await updateDealership(store.id, { name: f.name.trim(), city: f.city.trim() || null, state: f.state.trim() || null }); onChanged() }
@@ -116,15 +122,93 @@ function StoreRow({ store, dealerName, onChanged, onError }) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', borderTop: `1px solid ${X.line}` }}>
-      <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} style={{ ...input, flex: 2 }} />
-      <input value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} style={{ ...input, flex: 1 }} placeholder="City" />
-      <input value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} style={{ ...input, width: 70 }} placeholder="ST" />
-      {dealerName
-        ? <span style={svcChip} title="Serviced by this XPEL Authorized Dealer (assigned in the Authorized Dealers tab)">{dealerName}</span>
-        : <span style={{ ...svcChip, color: X.red, borderColor: 'rgba(125,20,25,0.35)' }} title="No authorized dealer services this rooftop yet — assign one in the Authorized Dealers tab">No dealer</span>}
-      {dirty && <button style={btnPrimary} onClick={save}>Save</button>}
-      <button style={{ ...btnGhost, color: X.red, borderColor: X.red }} onClick={remove}>Delete</button>
+    <div style={{ borderTop: `1px solid ${X.line}` }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', flexWrap: 'wrap' }}>
+        <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} style={{ ...input, flex: 2, minWidth: 160 }} />
+        <input value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} style={{ ...input, flex: 1, minWidth: 100 }} placeholder="City" />
+        <input value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} style={{ ...input, width: 70 }} placeholder="ST" />
+        {dealerName
+          ? <span style={svcChip} title="Serviced by this XPEL Authorized Dealer (assigned in the Authorized Dealers tab)">{dealerName}</span>
+          : <span style={{ ...svcChip, color: X.red, borderColor: 'rgba(125,20,25,0.35)' }} title="No authorized dealer services this rooftop yet — assign one in the Authorized Dealers tab">No dealer</span>}
+        <button
+          style={{ ...btnGhost, ...(assignedActiveCount === 0 ? { color: X.red, borderColor: 'rgba(125,20,25,0.35)' } : {}) }}
+          title="Which packages this store can order"
+          onClick={() => setShowPkgs(!showPkgs)}>
+          Packages {assignedActiveCount}/{activeProducts.length}
+        </button>
+        {dirty && <button style={btnPrimary} onClick={save}>Save</button>}
+        <button style={{ ...btnGhost, color: X.red, borderColor: X.red }} onClick={remove}>Delete</button>
+      </div>
+      {showPkgs && (
+        <PackagesPanel store={store} products={activeProducts} assignedIds={assignedIds} onChanged={onChanged} onError={onError} />
+      )}
+    </div>
+  )
+}
+
+// The store's menu: exactly which active packages this rooftop can order.
+// Checking assigns instantly; unchecking hides the package from the store's
+// order form — past orders and performance reports are unaffected.
+function PackagesPanel({ store, products, assignedIds, onChanged, onError }) {
+  const [busy, setBusy] = useState(false)
+
+  const byCategory = []
+  for (const p of products) {
+    const cat = p.category || 'Other'
+    let bucket = byCategory.find(([c]) => c === cat)
+    if (!bucket) { bucket = [cat, []]; byCategory.push(bucket) }
+    bucket[1].push(p)
+  }
+
+  async function toggle(p) {
+    setBusy(true)
+    try {
+      if (assignedIds.has(p.id)) await unassignPackage(store.id, p.id)
+      else await assignPackage(store.id, p.id)
+      await onChanged()
+    } catch (e) { onError(e.message) } finally { setBusy(false) }
+  }
+
+  async function setAll(on) {
+    setBusy(true)
+    try {
+      for (const p of products) {
+        const has = assignedIds.has(p.id)
+        if (on && !has) await assignPackage(store.id, p.id)
+        if (!on && has) await unassignPackage(store.id, p.id)
+      }
+      await onChanged()
+    } catch (e) { onError(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="x-fade" style={{ margin: '2px 0 10px', padding: 16, background: X.bg, borderRadius: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: X.slate, fontWeight: 700 }}>
+          Packages {store.name} can order
+        </div>
+        <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
+          <button disabled={busy} onClick={() => setAll(true)} style={linkBtn}>Assign all</button>
+          <button disabled={busy} onClick={() => setAll(false)} style={linkBtn}>Clear all</button>
+        </div>
+      </div>
+      {byCategory.map(([cat, items]) => (
+        <div key={cat} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: X.slate, margin: '6px 0 4px' }}>{cat}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 4 }}>
+            {items.map((p) => (
+              <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, padding: '5px 6px', borderRadius: 8, cursor: busy ? 'wait' : 'pointer', background: assignedIds.has(p.id) ? '#FFF7E0' : 'transparent' }}>
+                <input type="checkbox" checked={assignedIds.has(p.id)} disabled={busy} onChange={() => toggle(p)} />
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                <span style={{ color: X.slate, fontSize: 12 }}>{money(p.unit_price, 0)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div style={{ fontSize: 11.5, color: X.slate, marginTop: 6 }}>
+        Unchecking hides a package from this store's order form. Past orders and reports are unaffected.
+      </div>
     </div>
   )
 }
@@ -134,4 +218,5 @@ const input = { border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 1
 const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '9px 16px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', fontFamily: FONT.body }
 const btnGhostTop = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 16px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: FONT.body }
 const svcChip = { fontFamily: FONT.body, fontSize: 11, fontWeight: 700, color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 999, padding: '4px 10px', whiteSpace: 'nowrap' }
+const linkBtn = { border: 'none', background: 'transparent', color: X.strata, fontWeight: 700, fontSize: 12, cursor: 'pointer', textDecoration: 'underline', fontFamily: FONT.body, padding: 0 }
 const btnGhost = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 16px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
