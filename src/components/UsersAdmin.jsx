@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getGroups, getDealerships, getAuthorizedDealers } from '../lib/db'
 import { getAllProfiles, adminCreateUser, updateProfileAssignment } from '../lib/adminDb'
 import { COLOR as X, FONT, CARD } from '../lib/theme'
+import { TITLES, isManagerTitle } from '../lib/titles'
 
 const ROLES = ['dealership', 'installer', 'admin']
 
@@ -56,7 +57,7 @@ export default function UsersAdmin() {
                           ? <>{p.dealer.name} <span style={{ color: '#A9A59C' }}>· Authorized Dealer</span></>
                           : <span style={{ color: X.red }}>No authorized dealer — no access</span>)
                       : p.group
-                        ? `${p.group.name}${p.dealership ? ' · ' + p.dealership.name : ' (group-wide)'}`
+                        ? `${p.group.name}${p.dealership ? ' · ' + p.dealership.name : ' (group-wide)'}${p.title ? ' · ' + p.title : ''}`
                         : <span style={{ color: X.red }}>Not assigned — no access</span>}
                 </div>
                 <button style={btnGhost} onClick={() => setEditing(p.id)}>Edit</button>
@@ -70,7 +71,7 @@ export default function UsersAdmin() {
 }
 
 function AddUserCard({ groups, stores, dealers, onDone, onCancel }) {
-  const [f, setF] = useState({ full_name: '', email: '', password: '', role: 'dealership', group_id: '', dealership_id: '', authorized_dealer_id: '' })
+  const [f, setF] = useState({ full_name: '', email: '', password: '', role: 'dealership', group_id: '', dealership_id: '', authorized_dealer_id: '', title: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -83,6 +84,7 @@ function AddUserCard({ groups, stores, dealers, onDone, onCancel }) {
         group_id: f.role === 'dealership' ? f.group_id || null : null,
         dealership_id: f.role === 'dealership' ? f.dealership_id || null : null,
         authorized_dealer_id: f.role === 'installer' ? f.authorized_dealer_id || null : null,
+        title: f.role === 'dealership' ? f.title || null : null,
       })
       setMsg(`Created ${f.email}. Share the temporary password with them.`)
       setTimeout(onDone, 1200)
@@ -110,7 +112,7 @@ function AddUserCard({ groups, stores, dealers, onDone, onCancel }) {
         <input placeholder="Full name" value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} style={input} />
         <input placeholder="Email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} style={input} />
         <input placeholder="Temporary password (6+ chars)" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} style={input} />
-        <select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value, group_id: '', dealership_id: '', authorized_dealer_id: '' })} style={input}>
+        <select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value, group_id: '', dealership_id: '', authorized_dealer_id: '', title: '' })} style={input}>
           {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
         {f.role === 'dealership' && (
@@ -129,6 +131,12 @@ function AddUserCard({ groups, stores, dealers, onDone, onCancel }) {
           <select value={f.authorized_dealer_id} onChange={(e) => setF({ ...f, authorized_dealer_id: e.target.value })} style={input}>
             <option value="">Select authorized dealer…</option>
             {dealers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        )}
+        {f.role === 'dealership' && (
+          <select value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} style={input} title='Titles containing "Manager" unlock pricing, discounts, and team management at their store'>
+            <option value="">Title (optional)…</option>
+            {TITLES.map((t) => <option key={t} value={t}>{t}{isManagerTitle(t) ? ' — manager' : ''}</option>)}
           </select>
         )}
       </div>
@@ -165,6 +173,7 @@ function EditRow({ profile, groups, stores, dealers, onDone, onCancel }) {
     group_id: profile.group_id || '',
     dealership_id: profile.dealership_id || '',
     authorized_dealer_id: profile.authorized_dealer_id || '',
+    title: profile.title || '',
   })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -180,6 +189,7 @@ function EditRow({ profile, groups, stores, dealers, onDone, onCancel }) {
             group_id: f.role === 'dealership' ? f.group_id || null : null,
             dealership_id: f.role === 'dealership' ? f.dealership_id || null : null,
             authorized_dealer_id: f.role === 'installer' ? f.authorized_dealer_id || null : null,
+            title: f.role === 'dealership' ? f.title || null : null,
           })
       onDone()
     } catch (e) { setMsg(e.message); setBusy(false) }
@@ -189,7 +199,7 @@ function EditRow({ profile, groups, stores, dealers, onDone, onCancel }) {
     <div>
       <div style={{ fontSize: 13, marginBottom: 8 }}><b>{profile.full_name || profile.email}</b> — {profile.email}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <select value={f.role} onChange={(e) => setF({ role: e.target.value, group_id: '', dealership_id: '', authorized_dealer_id: '' })} style={input}>
+        <select value={f.role} onChange={(e) => setF({ role: e.target.value, group_id: '', dealership_id: '', authorized_dealer_id: '', title: '' })} style={input}>
           {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
         {f.role === 'dealership' && (
@@ -208,6 +218,12 @@ function EditRow({ profile, groups, stores, dealers, onDone, onCancel }) {
           <select value={f.authorized_dealer_id} onChange={(e) => setF({ ...f, authorized_dealer_id: e.target.value })} style={input}>
             <option value="">Select authorized dealer…</option>
             {dealers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        )}
+        {f.role === 'dealership' && (
+          <select value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} style={input}>
+            <option value="">Title (optional)…</option>
+            {TITLES.map((t) => <option key={t} value={t}>{t}{isManagerTitle(t) ? ' — manager' : ''}</option>)}
           </select>
         )}
         <button style={btnPrimary} disabled={busy} onClick={() => save(false)}>Save</button>

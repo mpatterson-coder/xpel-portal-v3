@@ -27,7 +27,7 @@ function todayStr() {
 // reload, and is cleared only when the order is submitted. Keys are scoped to
 // the signed-in user so one person's draft never appears for another.
 export default function OrderForm({ onCreated }) {
-  const { profile } = useAuth()
+  const { profile, isManager } = useAuth()
   const [catalog, setCatalog] = useState(null) // null = still loading
   const [loadErr, setLoadErr] = useState('')
 
@@ -45,7 +45,7 @@ export default function OrderForm({ onCreated }) {
   // Business rule: a vehicle gets AT MOST ONE of each package — nobody orders
   // two full-body PPF coverages for the same car. Quantity is pinned to 1
   // (also normalizes any older saved draft that predates this rule).
-  const lines = (linesRaw ?? []).map((l) => ({ ...l, quantity: 1 }))
+  const lines = (linesRaw ?? []).map((l) => ({ ...l, quantity: 1, disc: l.disc ?? null }))
 
   const [showMargin, setShowMargin] = useState(false) // deliberately NOT persisted: always reopens hidden (safe for customer presentation)
   const [busy, setBusy] = useState(false)
@@ -93,14 +93,45 @@ export default function OrderForm({ onCreated }) {
   }
   const removeLine = (id) => setLines((ls) => ls.filter((l) => l.product.id !== id))
 
-  const totals = useMemo(() => {
-    let revenue = 0, cost = 0
-    for (const l of lines) {
-      revenue += Number(l.product.effective_price) * l.quantity
-      cost += Number(l.product.cost) * l.quantity
+  // ---- Manager discounts: per line, $ or %, floored at wholesale ------------
+  const setDisc = (id, patch) =>
+    setLines((ls) => ls.map((l) => l.product.id === id
+      ? { ...l, disc: { ...(l.disc ?? { mode: '$', value: '' }), ...patch } }
+      : l))
+  const clearDisc = (id) =>
+    setLines((ls) => ls.map((l) => (l.product.id === id ? { ...l, disc: null } : l)))
+
+  // One line's money math: list retail, the wholesale floor, and what's
+  // actually charged after any discount — never below wholesale, never above
+  // list. The database enforces the exact same rules on submit.
+  function linePricing(l) {
+    const list = Number(l.product.effective_price)
+    const floor = Number(l.product.effective_wholesale ?? l.product.cost ?? 0)
+    let requested = list
+    if (isManager && l.disc && Number(l.disc.value) > 0) {
+      const off = l.disc.mode === '%' ? (list * Number(l.disc.value)) / 100 : Number(l.disc.value)
+      requested = Math.round((list - off) * 100) / 100
     }
-    return { revenue, cost, margin: revenue - cost, marginPct: revenue ? Math.round(((revenue - cost) / revenue) * 100) : 0 }
-  }, [lines])
+    const charged = Math.min(list, Math.max(floor, requested))
+    return { list, floor, charged, floored: requested < floor }
+  }
+
+  const totals = useMemo(() => {
+    let revenue = 0, wholesale = 0, list = 0
+    for (const l of lines) {
+      const pr = linePricing(l)
+      revenue += pr.charged
+      wholesale += pr.floor
+      list += pr.list
+    }
+    const margin = revenue - wholesale
+    return {
+      revenue, wholesale, margin, list,
+      discount: Math.max(0, list - revenue),
+      marginPct: revenue ? Math.round((margin / revenue) * 100) : 0,
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, isManager])
 
   const canSubmit = lines.length > 0 && cust.first.trim() && cust.last.trim() && veh.size && !busy
 
@@ -110,13 +141,16 @@ export default function OrderForm({ onCreated }) {
       const first = cust.first.trim()
       const last = cust.last.trim()
       const order = await createOrder(profile, {
-        lines: lines.map((l) => ({
-          product_id: l.product.id,
-          quantity: 1,
-          unit_price: l.product.effective_price,
-          list_price: l.product.effective_price,
-          unit_cost: l.product.effective_wholesale ?? null,
-        })),
+        lines: lines.map((l) => {
+          const pr = linePricing(l)
+          return {
+            product_id: l.product.id,
+            quantity: 1,
+            unit_price: pr.charged,                            // what the customer pays
+            list_price: pr.list,                               // pre-discount retail, frozen
+            unit_cost: l.product.effective_wholesale ?? null,  // wholesale, frozen
+          }
+        }),
         customer_first_name: first,
         customer_last_name: last,
         customer_name: `${first} ${last}`.trim(), // combined copy, so every existing screen keeps displaying names
@@ -232,20 +266,58 @@ export default function OrderForm({ onCreated }) {
               <input type="checkbox" checked={showMargin} onChange={(e) => setShowMargin(e.target.checked)} /> Show margin
             </label>
           </div>
-          {lines.map((l) => (
-            <div key={l.product.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-              <div style={{ flex: 1, fontSize: 14 }}>{l.product.name}</div>
-              <div style={{ width: 90, textAlign: 'right' }}>{money(l.product.effective_price)}</div>
-              {showMargin && <div style={{ width: 90, textAlign: 'right', color: X.green, fontSize: 13 }}>+{money(l.product.effective_price - l.product.cost)}</div>}
-              <button onClick={() => removeLine(l.product.id)} style={xBtn}>×</button>
+          {lines.map((l) => {
+            const pr = linePricing(l)
+            const discounted = pr.charged < pr.list
+            return (
+              <div key={l.product.id} style={{ padding: '6px 0', borderBottom: `1px dashed ${X.line}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, fontSize: 14, minWidth: 0 }}>{l.product.name}</div>
+                  {isManager && (l.disc ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {['$', '%'].map((m) => (
+                        <button key={m} onClick={() => setDisc(l.product.id, { mode: m })}
+                          style={{ ...miniBtn, ...(l.disc.mode === m ? miniBtnOn : {}) }}>{m}</button>
+                      ))}
+                      <input type="number" min="0" value={l.disc.value} autoFocus
+                        onChange={(e) => setDisc(l.product.id, { value: e.target.value })}
+                        placeholder="0" style={miniInput} />
+                      <button onClick={() => clearDisc(l.product.id)} style={xBtnSm} title="Remove discount">×</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setDisc(l.product.id, { mode: '$', value: '' })} style={discBtn}>Discount</button>
+                  ))}
+                  <div style={{ width: 116, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {discounted && <s style={{ color: X.slate, fontSize: 12, marginRight: 6, fontWeight: 400 }}>{money(pr.list)}</s>}
+                    <span style={{ fontWeight: discounted ? 700 : 400 }}>{money(pr.charged)}</span>
+                  </div>
+                  {showMargin && <div style={{ width: 84, textAlign: 'right', color: X.green, fontSize: 13 }}>+{money(pr.charged - pr.floor)}</div>}
+                  <button onClick={() => removeLine(l.product.id)} style={xBtn}>×</button>
+                </div>
+                {pr.floored && (
+                  <div style={{ fontSize: 11.5, color: X.red, textAlign: 'right', marginTop: 2 }}>
+                    Floored at wholesale {money(pr.floor)} — discounts can't go below it.
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          {totals.discount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: X.slate, fontSize: 13, marginTop: 6 }}>
+              <span>Discounts (off {money(totals.list)} list)</span><span>−{money(totals.discount)}</span>
             </div>
-          ))}
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontWeight: 800, fontSize: 16 }}>
             <span>Total</span><span>{money(totals.revenue)}</span>
           </div>
           {showMargin && (
             <div style={{ display: 'flex', justifyContent: 'space-between', color: X.green, fontSize: 13 }}>
               <span>Margin ({totals.marginPct}% of revenue)</span><span>{money(totals.margin)}</span>
+            </div>
+          )}
+          {isManager && (
+            <div style={{ marginTop: 8, fontSize: 11.5, color: X.slate }}>
+              Discounts are a manager action, apply per line, and can never go below your store's wholesale.
             </div>
           )}
         </div>
@@ -279,3 +351,8 @@ const desc = { fontSize: 11.5, color: X.slate, marginTop: 2, overflow: 'hidden',
 const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 8, padding: '14px 26px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body, fontSize: 13 }
 const btnDark = { background: X.black, color: '#fff', border: 'none', borderRadius: 10, padding: '0 20px', fontWeight: 700, cursor: 'pointer', fontFamily: FONT.body }
 const xBtn = { border: 'none', background: 'transparent', color: X.red, fontSize: 20, cursor: 'pointer', lineHeight: 1 }
+const xBtnSm = { border: 'none', background: 'transparent', color: X.slate, fontSize: 16, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }
+const discBtn = { border: `1px dashed ${X.gray}`, background: 'transparent', color: X.slate, borderRadius: 8, padding: '4px 9px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', fontFamily: FONT.body }
+const miniBtn = { border: `1px solid ${X.gray}`, background: '#FFFFFD', color: X.slate, borderRadius: 7, width: 26, height: 26, fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: FONT.body, lineHeight: 1 }
+const miniBtnOn = { background: X.black, color: '#fff', borderColor: X.black }
+const miniInput = { width: 64, boxSizing: 'border-box', background: '#FFFFFD', border: `1px solid ${X.gray}`, borderRadius: 7, padding: '5px 7px', fontSize: 12.5, fontFamily: FONT.body }

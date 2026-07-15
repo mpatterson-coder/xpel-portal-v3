@@ -62,6 +62,13 @@ export default function PerformanceDashboard({ mode }) {
   const byCategory = useMemo(() => breakdown(filtered, 'category'), [filtered])
   const byGroup = useMemo(() => (mode === 'admin' ? breakdown(filtered, 'groupName') : []), [filtered, mode])
   const byRooftop = useMemo(() => (mode !== 'dealership' ? breakdown(filtered, 'dealershipName') : []), [filtered, mode])
+  const bySeller = useMemo(() => (mode === 'dealership' ? breakdown(filtered, 'sellerName') : []), [filtered, mode])
+  const byTitle = useMemo(() => (mode === 'dealership' ? breakdown(filtered, 'sellerTitle') : []), [filtered, mode])
+  const sellerTitles = useMemo(() => {
+    const m = new Map()
+    for (const r of filtered) if (r.sellerName && !m.has(r.sellerName)) m.set(r.sellerName, r.sellerTitle)
+    return m
+  }, [filtered])
 
   // Which money column drives bars/sorting in this mode.
   const valueKey = mode === 'installer' ? 'wholesale' : 'retail'
@@ -124,6 +131,7 @@ export default function PerformanceDashboard({ mode }) {
                 <Kpi label="Your margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of revenue`} />
                 <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages sold`} />
                 <Kpi label="Avg order" value={totals.avgOrder} format={fm0} />
+                <Kpi label="Discounts given" value={totals.discount} format={fm0} sub="off list price" />
               </>
             )}
             {mode === 'installer' && (
@@ -181,6 +189,39 @@ export default function PerformanceDashboard({ mode }) {
                   <BarList items={byCategory} valueKey={valueKey} totals={totals} mode={mode} />
                 </Panel>
               </div>
+
+              {mode === 'dealership' && (
+                <>
+                  <Panel title="Top sellers">
+                    {bySeller.length === 0 ? (
+                      <div style={{ fontSize: 13, color: X.slate }}>No orders in this range yet.</div>
+                    ) : (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT.body }}>
+                        <thead>
+                          <tr><Th>Team member</Th><Th r>Orders</Th><Th r>Packages</Th><Th r>Retail</Th><Th r>Margin</Th></tr>
+                        </thead>
+                        <tbody>
+                          {[...bySeller].sort((a, b) => b.retail - a.retail).slice(0, 12).map((sl) => (
+                            <tr key={sl.key}>
+                              <td style={sellerTd}>
+                                <div style={{ fontWeight: 600 }}>{sl.name}</div>
+                                <div style={{ fontSize: 11.5, color: X.slate }}>{sellerTitles.get(sl.name) ?? ''}</div>
+                              </td>
+                              <td style={{ ...sellerTd, textAlign: 'right' }}>{sl.orders}</td>
+                              <td style={{ ...sellerTd, textAlign: 'right' }}>{sl.units}</td>
+                              <td style={{ ...sellerTd, textAlign: 'right', fontWeight: 700 }}>{fm0(sl.retail)}</td>
+                              <td style={{ ...sellerTd, textAlign: 'right', color: X.green }}>{fm0(sl.margin)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </Panel>
+                  <Panel title="By department (title)">
+                    <BarList items={byTitle} valueKey="retail" totals={totals} mode={mode} />
+                  </Panel>
+                </>
+              )}
 
               {mode === 'installer' && (
                 <Panel title="By store (wholesale)">

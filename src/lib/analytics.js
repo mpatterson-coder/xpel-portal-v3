@@ -30,6 +30,7 @@ export async function fetchPerformanceRows() {
       .select(`quantity, unit_price, list_price, unit_cost,
         product:products(id, name, category, tier, cost),
         order:orders(id, created_at, completed_at, created_by, status, dealership_id, group_id,
+          creator:profiles!orders_created_by_fkey(full_name, title),
           dealership:dealerships(name), group:dealership_groups(name))`)
       .order('id')
       .range(from, from + PAGE - 1)
@@ -58,6 +59,8 @@ export async function fetchPerformanceRows() {
       wholesale: Number(r.unit_cost ?? r.product.cost ?? 0) * r.quantity,
       completedAt: r.order.completed_at,
       createdBy: r.order.created_by,
+      sellerName: r.order.creator?.full_name ?? '—',
+      sellerTitle: r.order.creator?.title ?? 'No title set',
     }))
 }
 

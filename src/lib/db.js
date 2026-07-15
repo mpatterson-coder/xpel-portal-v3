@@ -42,7 +42,10 @@ export async function getCatalog() {
       ...p,
       canonical_name: p.name,
       // The store's own display name for the package, when they've set one.
+      alias: aliasByProduct.get(p.id) ?? null,
       name: aliasByProduct.get(p.id) ?? p.name,
+      base_price: p.unit_price,
+      price_overridden: priceByProduct.has(p.id),
       effective_price: priceByProduct.has(p.id) ? priceByProduct.get(p.id) : p.unit_price,
       // The installer's wholesale for this store's program (catalog default when unset).
       effective_wholesale: row.wholesale ?? p.cost,
@@ -70,6 +73,53 @@ export async function getAuthorizedDealers() {
   const { data, error } = await supabase.from('authorized_dealers').select('*').order('name')
   if (error) throw error
   return data ?? []
+}
+
+// ---- Store self-service (dealership managers) --------------------------------
+// RLS + database triggers enforce every rule here: only managers of the store
+// can write, retail can never go below wholesale, and claimed users must land
+// in the manager's own store.
+
+// Everyone at one rooftop, for the Team tab and staff performance.
+export async function getStoreTeam(dealership_id) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, title, role, dealership_id, created_at')
+    .eq('dealership_id', dealership_id)
+    .eq('role', 'dealership')
+    .order('full_name')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function setUserTitle(userId, title) {
+  const { error } = await supabase.from('profiles').update({ title }).eq('id', userId)
+  if (error) throw error
+}
+
+// A manager pulls a freshly created (unassigned) account into their own store.
+// The guard trigger only permits this exact claim — anything else stays pinned.
+export async function claimStoreUser(userId, { full_name, title, group_id, dealership_id }) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ full_name, title: title || null, group_id, dealership_id })
+    .eq('id', userId)
+  if (error) throw error
+}
+
+// The store's display name for one package. Blank clears back to the official name.
+export async function setPackageAlias(dealership_id, product_id, display_name) {
+  if (display_name && display_name.trim()) {
+    const { error } = await supabase
+      .from('dealership_package_names')
+      .upsert({ dealership_id, product_id, display_name: display_name.trim() }, { onConflict: 'dealership_id,product_id' })
+    if (error) throw error
+  } else {
+    const { error } = await supabase
+      .from('dealership_package_names')
+      .delete().eq('dealership_id', dealership_id).eq('product_id', product_id)
+    if (error) throw error
+  }
 }
 
 // ---- Orders -----------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { rememberAccount, updateAccountInfo, forgetAccount } from '../lib/accounts'
+import { isManagerTitle } from '../lib/titles'
 
 // This is the real replacement for the old UI role switcher. The logged-in
 // user's role now comes from the database (the profiles table), and the
@@ -56,7 +57,7 @@ export function AuthProvider({ children }) {
     setLoading(true)
     supabase
       .from('profiles')
-      .select('id, full_name, role, group_id, dealership_id, authorized_dealer_id')
+      .select('id, full_name, role, group_id, dealership_id, authorized_dealer_id, title')
       .eq('id', userId)
       .single()
       .then(({ data, error }) => {
@@ -79,6 +80,10 @@ export function AuthProvider({ children }) {
     groupId: profile?.group_id ?? null,
     dealershipId: profile?.dealership_id ?? null,
     dealerId: profile?.authorized_dealer_id ?? null,
+    title: profile?.title ?? null,
+    // Store managers (any preset title containing "Manager") may add users,
+    // edit retail, and apply discounts. The database enforces the same rule.
+    isManager: profile?.role === 'dealership' && isManagerTitle(profile?.title),
     loading,
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
     // Signing out also removes this person from the login screen's account

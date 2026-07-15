@@ -13,7 +13,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient'
 export async function getAllProfiles() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, group_id, dealership_id, authorized_dealer_id, created_at, group:dealership_groups(name), dealership:dealerships(name), dealer:authorized_dealers(name)')
+    .select('id, email, full_name, role, title, group_id, dealership_id, authorized_dealer_id, created_at, group:dealership_groups(name), dealership:dealerships(name), dealer:authorized_dealers(name)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data ?? []
@@ -43,7 +43,7 @@ export async function adminCreateUser({ email, password, full_name }) {
 // Assign or transfer a user: change role, group, and/or store.
 // Passing nulls for group/dealership (with role 'dealership') deactivates
 // them back to the zero-access holding screen.
-export async function updateProfileAssignment(profileId, { role, group_id, dealership_id, authorized_dealer_id, full_name }) {
+export async function updateProfileAssignment(profileId, { role, group_id, dealership_id, authorized_dealer_id, full_name, title }) {
   const patch = {
     role,
     group_id: group_id ?? null,
@@ -51,6 +51,7 @@ export async function updateProfileAssignment(profileId, { role, group_id, deale
     authorized_dealer_id: authorized_dealer_id ?? null,
   }
   if (full_name !== undefined) patch.full_name = full_name
+  if (title !== undefined) patch.title = title
   const { data, error } = await supabase
     .from('profiles')
     .update(patch)
