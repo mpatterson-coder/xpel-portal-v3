@@ -15,4 +15,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY — check your .env file.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// PER-TAB SESSIONS (the multi-login fix): Supabase's default keeps ONE login
+// per browser in localStorage, shared by every tab — sign in as someone else
+// in a new tab and every open tab silently becomes that user. Storing the
+// session in sessionStorage instead gives each TAB its own signed-in user:
+// a dealership, an installer, and an admin can run side-by-side. A tab
+// refresh keeps its login; a closed tab's login ends, and the account picker
+// on the login screen (lib/accounts.js) brings it back with one click.
+const perTabStorage = {
+  getItem: (k) => window.sessionStorage.getItem(k),
+  setItem: (k, v) => window.sessionStorage.setItem(k, v),
+  removeItem: (k) => window.sessionStorage.removeItem(k),
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: perTabStorage,
+    storageKey: 'xpel-portal-auth',
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+  },
+})

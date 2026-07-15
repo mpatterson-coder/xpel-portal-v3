@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { rememberAccount, updateAccountInfo, forgetAccount } from '../lib/accounts'
 
 // This is the real replacement for the old UI role switcher. The logged-in
 // user's role now comes from the database (the profiles table), and the
@@ -33,6 +34,7 @@ export function AuthProvider({ children }) {
       if (!data.session) setLoading(false)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (s) rememberAccount(s) // keeps the account picker's tokens fresh
       setSession((prev) => keepIfSameUser(prev, s))
       if (!s) {
         setProfile(null)
@@ -60,6 +62,7 @@ export function AuthProvider({ children }) {
       .then(({ data, error }) => {
         if (!active) return
         if (error) console.error('Could not load profile:', error.message)
+        if (data) updateAccountInfo(userId, { full_name: data.full_name, role: data.role })
         setProfile(data ?? null)
         setLoading(false)
       })
@@ -78,7 +81,12 @@ export function AuthProvider({ children }) {
     dealerId: profile?.authorized_dealer_id ?? null,
     loading,
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
-    signOut: () => supabase.auth.signOut(),
+    // Signing out also removes this person from the login screen's account
+    // picker — "sign out" should mean gone, not "one click from returning".
+    signOut: () => {
+      if (session?.user?.id) forgetAccount(session.user.id)
+      return supabase.auth.signOut()
+    },
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
+import { listAccounts, forgetAccount } from '../lib/accounts'
 import { COLOR, FONT } from '../lib/theme'
 import logoWhite from '../assets/xpel-white.png'
+
+const ROLE_LABEL = { dealership: 'Dealership', installer: 'Installer', admin: 'XPEL Admin' }
 
 // =============================================================================
 // The front door. Carbon Black field, the brand's forward-leaning shape
@@ -14,6 +18,29 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [accounts, setAccounts] = useState(() => listAccounts())
+
+  // One-click resume for anyone who has signed in from this browser before.
+  // If the saved tokens have gone stale, fall back to the password form.
+  async function continueAs(acct) {
+    setError(''); setBusy(true)
+    const { error } = await supabase.auth.setSession({
+      access_token: acct.access_token,
+      refresh_token: acct.refresh_token,
+    })
+    setBusy(false)
+    if (error) {
+      forgetAccount(acct.id)
+      setAccounts(listAccounts())
+      setError('That saved session has expired — please sign in with your password.')
+    }
+  }
+
+  function removeAccount(e, acct) {
+    e.stopPropagation()
+    forgetAccount(acct.id)
+    setAccounts(listAccounts())
+  }
 
   async function submit(e) {
     e.preventDefault(); setError(''); setBusy(true)
@@ -39,6 +66,27 @@ export default function Login() {
           <div style={{ ...s.chip, background: COLOR.stone }} />
         </div>
         <div style={s.tagline}>Dealership solutions. Designed around you.</div>
+
+        {accounts.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={s.label}>Continue as</div>
+            {accounts.map((a) => (
+              <button key={a.id} type="button" disabled={busy} onClick={() => continueAs(a)} style={s.acct}>
+                <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                  <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.full_name || a.email}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,253,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.email}
+                  </span>
+                </span>
+                {a.role && <span style={s.acctRole}>{ROLE_LABEL[a.role] ?? a.role}</span>}
+                <span role="button" title="Remove from this list" onClick={(e) => removeAccount(e, a)} style={s.acctX}>×</span>
+              </button>
+            ))}
+            <div style={s.divider}><span style={s.dividerLine} />or sign in<span style={s.dividerLine} /></div>
+          </div>
+        )}
 
         <label style={s.label}>Email</label>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" style={s.input} required />
@@ -88,4 +136,19 @@ const s = {
   },
   error: { marginTop: 16, color: '#E4837F', fontSize: 13.5 },
   foot: { marginTop: 22, color: 'rgba(255,255,253,0.35)', fontSize: 11.5, textAlign: 'center', letterSpacing: '0.03em' },
+  acct: {
+    display: 'flex', alignItems: 'center', gap: 10, width: '100%', marginBottom: 6,
+    background: 'rgba(255,255,253,0.06)', border: '1px solid rgba(255,255,253,0.14)',
+    borderRadius: 12, padding: '10px 12px', color: COLOR.white, cursor: 'pointer', fontFamily: FONT.body,
+  },
+  acctRole: {
+    color: COLOR.yellow, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+    border: '1px solid rgba(253,181,33,0.45)', borderRadius: 999, padding: '3px 9px', flexShrink: 0,
+  },
+  acctX: { color: 'rgba(255,255,253,0.45)', fontSize: 17, lineHeight: 1, padding: '0 2px', flexShrink: 0 },
+  divider: {
+    display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0 2px',
+    color: 'rgba(255,255,253,0.4)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em',
+  },
+  dividerLine: { flex: 1, height: 1, background: 'rgba(255,255,253,0.12)' },
 }
