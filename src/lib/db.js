@@ -20,23 +20,34 @@ import { supabase } from './supabaseClient'
 // Packages the store ordered historically but that left its program stay
 // visible in reports — they just never reappear here as orderable.
 export async function getCatalog() {
-  const [{ data: inProgram, error: aErr }, { data: prices, error: prErr }] =
-    await Promise.all([
-      supabase.from('program_products').select('product:products(*)'),
-      supabase.from('dealership_pricing').select('product_id, unit_price'),
-    ])
+  const [
+    { data: inProgram, error: aErr },
+    { data: prices, error: prErr },
+    { data: aliasRows, error: nErr },
+  ] = await Promise.all([
+    supabase.from('program_products').select('wholesale, product:products(*)'),
+    supabase.from('dealership_pricing').select('product_id, unit_price'),
+    supabase.from('dealership_package_names').select('product_id, display_name'),
+  ])
   if (aErr) throw aErr
   if (prErr) throw prErr
+  if (nErr) throw nErr
 
   const priceByProduct = new Map((prices ?? []).map((o) => [o.product_id, o.unit_price]))
+  const aliasByProduct = new Map((aliasRows ?? []).map((o) => [o.product_id, o.display_name]))
   return (inProgram ?? [])
-    .map((r) => r.product)
-    .filter((p) => p && p.active)
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((p) => ({
+    .map((r) => ({ row: r, p: r.product }))
+    .filter(({ p }) => p && p.active)
+    .map(({ row, p }) => ({
       ...p,
+      canonical_name: p.name,
+      // The store's own display name for the package, when they've set one.
+      name: aliasByProduct.get(p.id) ?? p.name,
       effective_price: priceByProduct.has(p.id) ? priceByProduct.get(p.id) : p.unit_price,
+      // The installer's wholesale for this store's program (catalog default when unset).
+      effective_wholesale: row.wholesale ?? p.cost,
     }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // ---- Dealership network -----------------------------------------------------
@@ -86,7 +97,16 @@ export async function getOrderDetail(orderId) {
   if (oErr) throw oErr
   if (iErr) throw iErr
   if (hErr) throw hErr
-  return { order, items: items ?? [], history: history ?? [] }
+
+  // The store's display names for packages, so the shop can see how the
+  // dealership lists what it's installing.
+  const { data: aliasRows } = await supabase
+    .from('dealership_package_names')
+    .select('product_id, display_name')
+    .eq('dealership_id', order.dealership_id)
+  const aliases = Object.fromEntries((aliasRows ?? []).map((a) => [a.product_id, a.display_name]))
+
+  return { order, items: items ?? [], history: history ?? [], aliases }
 }
 
 // Place a new order. `profile` is the current user's profile (from useAuth),
@@ -134,7 +154,9 @@ export async function createOrder(profile, {
       order_id: order.id,
       product_id: l.product_id,
       quantity: l.quantity,
-      unit_price: l.unit_price,
+      unit_price: l.unit_price,                       // charged retail (after any discount)
+      list_price: l.list_price ?? l.unit_price,       // pre-discount retail, frozen
+      unit_cost: l.unit_cost ?? null,                 // wholesale, frozen (trigger fills if absent)
     }))
     const { error: iErr } = await supabase.from('order_items').insert(rows)
     if (iErr) throw iErr

@@ -11,8 +11,10 @@ import { supabase } from './supabaseClient'
 // Money semantics used throughout:
 //   retail    = what the consumer pays the dealership (price snapshot taken
 //               when the order was placed: order_items.unit_price)
-//   wholesale = what the dealership pays for the product (products.cost —
-//               the CURRENT catalog cost; the pilot does not snapshot cost)
+//   wholesale = what the dealership pays the installer — snapshotted onto the
+//               order line (order_items.unit_cost) at submission, so history
+//               never drifts when prices change (legacy rows fall back to the
+//               catalog cost they were backfilled with)
 //   margin    = retail − wholesale  (the dealership's profit)
 // =============================================================================
 
@@ -25,9 +27,9 @@ export async function fetchPerformanceRows() {
   for (let page = 0; page < 10; page++) {
     const { data, error } = await supabase
       .from('order_items')
-      .select(`quantity, unit_price,
+      .select(`quantity, unit_price, list_price, unit_cost,
         product:products(id, name, category, tier, cost),
-        order:orders(id, created_at, status, dealership_id, group_id,
+        order:orders(id, created_at, completed_at, created_by, status, dealership_id, group_id,
           dealership:dealerships(name), group:dealership_groups(name))`)
       .order('id')
       .range(from, from + PAGE - 1)
@@ -52,7 +54,10 @@ export async function fetchPerformanceRows() {
       category: r.product.category || 'Other',
       qty: r.quantity,
       retail: Number(r.unit_price) * r.quantity,
-      wholesale: Number(r.product.cost || 0) * r.quantity,
+      listRetail: Number(r.list_price ?? r.unit_price) * r.quantity,
+      wholesale: Number(r.unit_cost ?? r.product.cost ?? 0) * r.quantity,
+      completedAt: r.order.completed_at,
+      createdBy: r.order.created_by,
     }))
 }
 
@@ -73,22 +78,30 @@ export function applyFilters(rows, f = {}) {
 }
 
 export function computeTotals(rows) {
-  let retail = 0, wholesale = 0, units = 0
+  let retail = 0, wholesale = 0, listRetail = 0, units = 0
   const orderIds = new Set()
   const completed = new Set()
+  const completionDays = new Map() // orderId -> days from submitted to completed
   for (const r of rows) {
-    retail += r.retail; wholesale += r.wholesale; units += r.qty
+    retail += r.retail; wholesale += r.wholesale; listRetail += (r.listRetail ?? r.retail); units += r.qty
     orderIds.add(r.orderId)
     if (r.status === 'completed') completed.add(r.orderId)
+    if (r.completedAt) {
+      const d = (new Date(r.completedAt) - new Date(r.date)) / 86400000
+      if (isFinite(d) && d >= 0) completionDays.set(r.orderId, d)
+    }
   }
   const margin = retail - wholesale
+  const cds = [...completionDays.values()]
   return {
     retail, wholesale, margin, units,
+    discount: Math.max(0, listRetail - retail),
     marginPct: retail ? Math.round((margin / retail) * 100) : 0,
     orders: orderIds.size,
     completed: completed.size,
     avgOrder: orderIds.size ? retail / orderIds.size : 0,
     avgWholesaleOrder: orderIds.size ? wholesale / orderIds.size : 0,
+    avgCompletionDays: cds.length ? cds.reduce((a, b) => a + b, 0) / cds.length : null,
   }
 }
 

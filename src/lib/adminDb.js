@@ -142,8 +142,12 @@ export async function getAllPrograms() {
   return data ?? []
 }
 
-export async function createProgram(name) {
-  const { data, error } = await supabase.from('programs').insert({ name }).select().single()
+export async function createProgram(name, authorized_dealer_id = null) {
+  const { data, error } = await supabase
+    .from('programs')
+    .insert({ name, authorized_dealer_id })
+    .select()
+    .single()
   if (error) throw error
   return data
 }
@@ -162,14 +166,17 @@ export async function deleteProgram(id) {
 
 // Copy a program (name + full package set) as a starting point for a variant.
 export async function duplicateProgram(id, newName) {
-  const prog = await createProgram(newName)
+  const { data: src, error: sErr } = await supabase
+    .from('programs').select('authorized_dealer_id').eq('id', id).single()
+  if (sErr) throw sErr
+  const prog = await createProgram(newName, src?.authorized_dealer_id ?? null)
   const { data: items, error } = await supabase
-    .from('program_products').select('product_id').eq('program_id', id)
+    .from('program_products').select('product_id, wholesale').eq('program_id', id)
   if (error) throw error
   if (items?.length) {
     const { error: insErr } = await supabase
       .from('program_products')
-      .insert(items.map((i) => ({ program_id: prog.id, product_id: i.product_id })))
+      .insert(items.map((i) => ({ program_id: prog.id, product_id: i.product_id, wholesale: i.wholesale })))
     if (insErr) throw insErr
   }
   return prog
@@ -177,7 +184,7 @@ export async function duplicateProgram(id, newName) {
 
 export async function getAllProgramProducts() {
   const { data, error } = await supabase
-    .from('program_products').select('id, program_id, product_id')
+    .from('program_products').select('id, program_id, product_id, wholesale')
   if (error) throw error
   return data ?? []
 }
@@ -193,6 +200,17 @@ export async function removeProgramProduct(program_id, product_id) {
   const { error } = await supabase
     .from('program_products')
     .delete().eq('program_id', program_id).eq('product_id', product_id)
+  if (error) throw error
+}
+
+// The installer's wholesale for one package in one of their programs.
+// Null clears it back to the catalog default cost.
+export async function setProgramWholesale(program_id, product_id, wholesale) {
+  const { error } = await supabase
+    .from('program_products')
+    .update({ wholesale })
+    .eq('program_id', program_id)
+    .eq('product_id', product_id)
   if (error) throw error
 }
 

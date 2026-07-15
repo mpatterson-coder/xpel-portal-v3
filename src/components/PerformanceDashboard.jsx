@@ -61,7 +61,7 @@ export default function PerformanceDashboard({ mode }) {
   const byProduct = useMemo(() => breakdown(filtered, 'productName'), [filtered])
   const byCategory = useMemo(() => breakdown(filtered, 'category'), [filtered])
   const byGroup = useMemo(() => (mode === 'admin' ? breakdown(filtered, 'groupName') : []), [filtered, mode])
-  const byRooftop = useMemo(() => (mode === 'admin' ? breakdown(filtered, 'dealershipName') : []), [filtered, mode])
+  const byRooftop = useMemo(() => (mode !== 'dealership' ? breakdown(filtered, 'dealershipName') : []), [filtered, mode])
 
   // Which money column drives bars/sorting in this mode.
   const valueKey = mode === 'installer' ? 'wholesale' : 'retail'
@@ -132,6 +132,7 @@ export default function PerformanceDashboard({ mode }) {
                 <Kpi label="Jobs" value={totals.orders} />
                 <Kpi label="Packages installed" value={totals.units} />
                 <Kpi label="Jobs completed" value={totals.completed} sub={`avg ${fm0(totals.avgWholesaleOrder)} / job`} />
+                <Kpi label="Avg completion" value={totals.avgCompletionDays ?? '—'} format={(v) => `${v.toFixed(1)} days`} sub="submitted → completed" />
               </>
             )}
             {mode === 'admin' && (
@@ -181,6 +182,12 @@ export default function PerformanceDashboard({ mode }) {
                 </Panel>
               </div>
 
+              {mode === 'installer' && (
+                <Panel title="By store (wholesale)">
+                  <BarList items={byRooftop} valueKey="wholesale" totals={totals} mode={mode} />
+                </Panel>
+              )}
+
               {mode === 'admin' && (
                 <>
                   <Panel title="Performance by dealer group">
@@ -207,9 +214,9 @@ export default function PerformanceDashboard({ mode }) {
               )}
 
               <div style={{ fontSize: 11.5, color: X.slate, marginTop: 14 }}>
-                Cancelled orders are excluded. {mode === 'installer'
-                  ? 'Wholesale figures use the current catalog cost of each product.'
-                  : 'Margin and wholesale figures use the current catalog cost of each product.'}
+                Cancelled orders are excluded. Wholesale, retail, and margin are frozen onto each order
+                at submission — later price changes never rewrite history. Avg completion counts days from
+                submitted to completed.
               </div>
             </>
           )}

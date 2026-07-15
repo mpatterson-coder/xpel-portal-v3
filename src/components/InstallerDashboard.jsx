@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
-import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder } from '../lib/db'
+import { useAuth } from '../context/AuthContext'
+import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder, getDealerships } from '../lib/db'
+import { getAllPrograms, getAllProducts, setDealershipProgram } from '../lib/adminDb'
 import { usePersistentState } from '../lib/uiState'
+import ProgramsAdmin from './ProgramsAdmin'
+import { Spinner } from './ui'
 import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import StatusTimeline from './StatusTimeline'
 import TabNav from './TabNav'
@@ -21,8 +25,10 @@ export default function InstallerDashboard() {
   const [view, setView] = usePersistentState('xpel.installer.view', 'queue')
   return (
     <div style={{ maxWidth: 1000 }}>
-      <TabNav tabs={{ queue: 'Fulfillment Queue', performance: 'Performance' }} value={view} onChange={setView} />
+      <TabNav tabs={{ queue: 'Fulfillment Queue', stores: 'My Stores', programs: 'Programs', performance: 'Performance' }} value={view} onChange={setView} />
       {view === 'queue' && <QueueView />}
+      {view === 'stores' && <StoresView />}
+      {view === 'programs' && <ProgramsView />}
       {view === 'performance' && <PerformanceDashboard mode="installer" />}
     </div>
   )
@@ -89,7 +95,7 @@ function QueueRow({ order, onChanged }) {
 
   // Wholesale amount for this order (installer's billing view).
   const wholesale = detail && !detail.error
-    ? detail.items.reduce((s, it) => s + Number(it.product?.cost || 0) * it.quantity, 0)
+    ? detail.items.reduce((s, it) => s + Number(it.unit_cost ?? it.product?.cost ?? 0) * it.quantity, 0)
     : null
 
   return (
@@ -146,8 +152,13 @@ function QueueRow({ order, onChanged }) {
               <div style={secLbl}>Coverage — wholesale (billed to dealership)</div>
               {detail.items.map((it) => (
                 <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '2px 0' }}>
-                  <span>{it.quantity} × {it.product?.name}</span>
-                  <span>{money(Number(it.product?.cost || 0) * it.quantity)}</span>
+                  <span>
+                    {it.quantity} × {it.product?.name}
+                    {detail.aliases?.[it.product_id] && detail.aliases[it.product_id] !== it.product?.name && (
+                      <span style={{ color: X.slate, fontSize: 12 }}> · listed at the store as “{detail.aliases[it.product_id]}”</span>
+                    )}
+                  </span>
+                  <span>{money(Number(it.unit_cost ?? it.product?.cost ?? 0) * it.quantity)}</span>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, padding: '6px 0', borderTop: `1px solid ${X.stone}`, marginTop: 4 }}>
@@ -172,6 +183,82 @@ function Badge({ status }) {
   return <span style={{ fontFamily: FONT.body, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: t.fg, background: t.bg, borderRadius: 999, padding: '4px 11px', width: 96, textAlign: 'center', fontWeight: 700 }}>{(status || '').replace('_', ' ')}</span>
 }
 
+// Every rooftop this shop services: assign one of the shop's programs to set
+// the store's package menu and the shop's wholesale. Retail stays the store's.
+function StoresView() {
+  const { dealerId } = useAuth()
+  const [stores, setStores] = useState(null)
+  const [programs, setPrograms] = useState([])
+  const [err, setErr] = useState('')
+  const [busyId, setBusyId] = useState(null)
+
+  const load = () =>
+    Promise.all([getDealerships(), getAllPrograms()])
+      .then(([s, p]) => { setStores(s); setPrograms(p) })
+      .catch((e) => setErr(e.message))
+  useEffect(() => { load() }, [])
+
+  const own = programs.filter((p) => p.authorized_dealer_id === dealerId)
+
+  async function setProgram(store, v) {
+    setBusyId(store.id)
+    try { await setDealershipProgram(store.id, v || null); await load() }
+    catch (e) { setErr(e.message) } finally { setBusyId(null) }
+  }
+
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 4px', fontSize: 21, fontWeight: FONT.headingWeight }}>My Stores</h2>
+      <div style={{ fontSize: 13, color: X.slate, marginBottom: 12, maxWidth: 680 }}>
+        The dealership rooftops your shop services. Assign one of <b>your programs</b> to set a store's
+        package menu and your wholesale rates; each store manages its own retail pricing.
+      </div>
+      {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
+      {stores === null && <Spinner />}
+      {stores !== null && stores.length === 0 && (
+        <div style={{ ...CARD, padding: 18, color: X.slate, fontSize: 14 }}>
+          No rooftops are assigned to your shop yet — XPEL manages those assignments.
+        </div>
+      )}
+      {stores !== null && stores.length > 0 && (
+        <div style={{ ...CARD, padding: 8, overflow: 'hidden' }}>
+          {stores.map((store) => {
+            const foreign = store.program_id && !own.some((p) => p.id === store.program_id)
+            return (
+              <div key={store.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 12px', borderBottom: `1px solid ${X.line}` }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{store.name}</div>
+                  <div style={{ fontSize: 12, color: X.slate }}>{[store.city, store.state].filter(Boolean).join(', ') || '—'}</div>
+                </div>
+                {!store.program_id && <span style={{ fontSize: 11.5, fontWeight: 700, color: X.red }}>No program — empty menu</span>}
+                <select value={store.program_id || ''} disabled={busyId === store.id}
+                  onChange={(e) => setProgram(store, e.target.value)}
+                  style={storeSel} title="Which of your programs this store is on">
+                  <option value="">No program (empty menu)</option>
+                  {foreign && <option value={store.program_id} disabled>Assigned by XPEL</option>}
+                  {own.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// The shop's program library (package sets + wholesale), scoped to this shop.
+function ProgramsView() {
+  const { dealerId } = useAuth()
+  const [products, setProducts] = useState(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { getAllProducts().then(setProducts).catch((e) => setErr(e.message)) }, [])
+  if (err) return <div style={{ color: X.red }}>{err}</div>
+  if (products === null) return <Spinner />
+  return <ProgramsAdmin products={products} mode="installer" dealerId={dealerId} />
+}
+
+const storeSel = { border: `1px solid ${X.gray}`, background: '#FFFFFD', borderRadius: 10, padding: '8px 10px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT.body, color: X.black, minWidth: 220 }
 const secLbl = { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: X.slate, marginBottom: 6, fontWeight: 700 }
 const flag = { fontFamily: FONT.body, fontSize: 11, borderRadius: 999, padding: '4px 10px', fontWeight: 700 }
 const statusSel = { border: `1px solid ${X.gray}`, background: '#FFFFFD', borderRadius: 10, padding: '8px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FONT.body, color: X.black }

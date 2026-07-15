@@ -110,7 +110,13 @@ export default function OrderForm({ onCreated }) {
       const first = cust.first.trim()
       const last = cust.last.trim()
       const order = await createOrder(profile, {
-        lines: lines.map((l) => ({ product_id: l.product.id, quantity: 1, unit_price: l.product.effective_price })),
+        lines: lines.map((l) => ({
+          product_id: l.product.id,
+          quantity: 1,
+          unit_price: l.product.effective_price,
+          list_price: l.product.effective_price,
+          unit_cost: l.product.effective_wholesale ?? null,
+        })),
         customer_first_name: first,
         customer_last_name: last,
         customer_name: `${first} ${last}`.trim(), // combined copy, so every existing screen keeps displaying names
