@@ -12,24 +12,32 @@ import { Spinner } from './ui'
 // without websockets; opening a channel marks it read. XPEL admin is locked
 // out at the database layer — these conversations belong to the two parties.
 // =============================================================================
-export default function MessagesHub({ mode }) {
+export default function MessagesHub({ mode, unread: unreadProp, onRead }) {
   const { profile, dealerId } = useAuth()
   const [stores, setStores] = useState(null)
   const [dealers, setDealers] = useState([])
   const [orders, setOrders] = useState([])
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)
-  const [unread, setUnread] = useState({ counts: new Map(), total: 0 })
-
-  const refreshUnread = () => getUnreadState(profile.id).then(setUnread).catch(() => {})
+  const [unreadLocal, setUnreadLocal] = useState({ counts: new Map(), total: 0 })
+  // The dashboard usually shares its global unread state (for the tab badge);
+  // reads here ping it so the badge updates instantly. Standalone use still
+  // works via the local fallback.
+  const unread = unreadProp ?? unreadLocal
+  const refreshUnread = () => {
+    if (onRead) onRead()
+    else getUnreadState(profile.id).then(setUnreadLocal).catch(() => {})
+  }
 
   useEffect(() => {
     Promise.all([getDealerships(), getAuthorizedDealers(), getOrders()])
       .then(([s, d, o]) => { setStores(s); setDealers(d); setOrders(o) })
       .catch((e) => setErr(e.message))
-    refreshUnread()
-    const t = setInterval(refreshUnread, 30000)
-    return () => clearInterval(t)
+    if (!unreadProp) {
+      refreshUnread()
+      const t = setInterval(refreshUnread, 30000)
+      return () => clearInterval(t)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -9,6 +9,7 @@ import StorePricingAdmin from './StorePricingAdmin'
 import TeamAdmin from './TeamAdmin'
 import MessagesHub from './MessagesHub'
 import { usePersistentState } from '../lib/uiState'
+import { useUnread } from '../lib/useUnread'
 import { COLOR } from '../lib/theme'
 
 // The F&I ("Dealership") view: place orders, track this location's orders,
@@ -16,7 +17,8 @@ import { COLOR } from '../lib/theme'
 // additionally get Packages & Pricing (rename packages, set retail) and Team
 // (add users, set titles). RLS scopes everything to the user's own store.
 export default function DealershipDashboard() {
-  const { isManager } = useAuth()
+  const { profile, isManager } = useAuth()
+  const { unread, refresh: refreshUnread } = useUnread(profile?.id)
   const [view, setView] = usePersistentState('xpel.dealer.view', 'order')
   const [orders, setOrders] = useState([])
   const [err, setErr] = useState('')
@@ -36,7 +38,7 @@ export default function DealershipDashboard() {
 
   return (
     <div style={{ maxWidth: 1100 }}>
-      <TabNav tabs={tabs} value={active} onChange={setView} />
+      <TabNav tabs={tabs} value={active} onChange={setView} badges={{ messages: unread.total }} />
       {active === 'order' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
           <OrderForm onCreated={load} />
@@ -48,7 +50,7 @@ export default function DealershipDashboard() {
       )}
       {active === 'pricing' && <StorePricingAdmin />}
       {active === 'team' && <TeamAdmin />}
-      {active === 'messages' && <MessagesHub mode="dealership" />}
+      {active === 'messages' && <MessagesHub mode="dealership" unread={unread} onRead={refreshUnread} />}
       {active === 'performance' && <PerformanceDashboard mode="dealership" />}
     </div>
   )

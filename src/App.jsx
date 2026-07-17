@@ -1,6 +1,7 @@
 import { useAuth } from './context/AuthContext'
 import Login from './components/Login'
 import PageHero from './components/PageHero'
+import ErrorBoundary from './components/ErrorBoundary'
 import DealershipDashboard from './components/DealershipDashboard'
 import InstallerDashboard from './components/InstallerDashboard'
 import AdminDashboard from './components/AdminDashboard'
@@ -63,10 +64,12 @@ export default function App() {
       </div>
 
       <div className="x-fade" style={{ flex: 1, width: '100%', padding: '28px 28px 56px', maxWidth: 1240, margin: '0 auto' }}>
-        <PageHero />
-        {role === 'dealership' && <DealershipDashboard />}
-        {role === 'installer' && <InstallerDashboard />}
-        {role === 'admin' && <AdminDashboard />}
+        <ErrorBoundary>
+          <PageHero />
+          {role === 'dealership' && <DealershipDashboard />}
+          {role === 'installer' && <InstallerDashboard />}
+          {role === 'admin' && <AdminDashboard />}
+        </ErrorBoundary>
       </div>
 
       {/* Product footer — xpel.com format. */}

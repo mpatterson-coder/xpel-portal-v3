@@ -3,7 +3,7 @@ import { COLOR as X, FONT, ELEV } from '../lib/theme'
 // Segmented control (iOS-style): a recessed Stone track with the active
 // segment floating on it as an Off-White pill. Used for role views, queue
 // filters, and the admin's order-status filter — one consistent gesture.
-export default function TabNav({ tabs, value, onChange, style }) {
+export default function TabNav({ tabs, value, onChange, badges, style }) {
   return (
     <div style={{
       display: 'inline-flex', flexWrap: 'wrap', gap: 2,
@@ -19,7 +19,17 @@ export default function TabNav({ tabs, value, onChange, style }) {
             background: on ? X.panel : 'transparent',
             color: on ? X.black : X.slate,
             boxShadow: on ? ELEV.seg : 'none',
-          }}>{lbl}</button>
+          }}>
+            {lbl}
+            {badges?.[k] > 0 && (
+              <span style={{
+                marginLeft: 7, background: X.yellow, color: X.black, borderRadius: 999,
+                fontSize: 10.5, fontWeight: 800, minWidth: 18, height: 18,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 5px', verticalAlign: '1px',
+              }}>{badges[k] > 9 ? '9+' : badges[k]}</span>
+            )}
+          </button>
         )
       })}
     </div>

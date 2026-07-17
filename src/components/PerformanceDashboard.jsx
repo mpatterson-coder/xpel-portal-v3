@@ -314,6 +314,11 @@ const Panel = ({ title, children }) => (
   </div>
 )
 
+// Cell style for the Top sellers table (dealership mode). This constant was
+// referenced but never defined in update 15 — the cause of the dealership
+// Performance white-screen crash.
+const sellerTd = { padding: '8px 6px', borderTop: `1px solid ${X.line}`, fontSize: 13.5 }
+
 const Th = ({ children, r }) => <th style={{ textAlign: r ? 'right' : 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: X.slate, padding: '8px 6px', borderBottom: `1px solid ${X.gray}` }}>{children}</th>
 const Td = ({ children, r, style }) => <td style={{ textAlign: r ? 'right' : 'left', fontSize: 14, padding: '8px 6px', borderBottom: `1px solid ${X.line}`, ...style }}>{children}</td>
 const tbl = { width: '100%', borderCollapse: 'collapse' }

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder, getDealerships } from '../lib/db'
 import { getAllPrograms, getAllProducts, setDealershipProgram } from '../lib/adminDb'
 import { usePersistentState } from '../lib/uiState'
+import { useUnread } from '../lib/useUnread'
 import ProgramsAdmin from './ProgramsAdmin'
 import InstallerCatalog from './InstallerCatalog'
 import MessagesHub from './MessagesHub'
@@ -25,14 +26,16 @@ const FILTERS = { active: 'Active', completed: 'Completed', all: 'All' }
 // the shop bills the dealership). The consumer retail price never appears here.
 export default function InstallerDashboard() {
   const [view, setView] = usePersistentState('xpel.installer.view', 'queue')
+  const { profile } = useAuth()
+  const { unread, refresh: refreshUnread } = useUnread(profile?.id)
   return (
     <div style={{ maxWidth: 1000 }}>
-      <TabNav tabs={{ queue: 'Fulfillment Queue', stores: 'My Stores', packages: 'My Packages', programs: 'Programs', messages: 'Messages', performance: 'Performance' }} value={view} onChange={setView} />
+      <TabNav tabs={{ queue: 'Fulfillment Queue', stores: 'My Stores', packages: 'My Packages', programs: 'Programs', messages: 'Messages', performance: 'Performance' }} value={view} onChange={setView} badges={{ messages: unread.total }} />
       {view === 'queue' && <QueueView />}
       {view === 'stores' && <StoresView />}
       {view === 'packages' && <InstallerCatalog />}
       {view === 'programs' && <ProgramsView />}
-      {view === 'messages' && <MessagesHub mode="installer" />}
+      {view === 'messages' && <MessagesHub mode="installer" unread={unread} onRead={refreshUnread} />}
       {view === 'performance' && <PerformanceDashboard mode="installer" />}
     </div>
   )
