@@ -1,9 +1,8 @@
 // =============================================================================
-// Dealership staff titles — the single source of truth for the preset list and
-// the "who is a store manager" rule. Must stay in lockstep with the database's
-// is_store_manager() function (migration 5): every title containing "Manager"
-// unlocks the sensitive actions (adding users, editing retail, discounts);
-// Advisors place orders but can't change pricing.
+// Dealership staff titles — REPORTING LABELS ONLY (Top sellers, By department).
+// Since migration 6, permissions come from the explicit is_store_admin flag on
+// each profile, NOT from the title. MANAGER_TITLES remains only because
+// migration 6 grandfathered those titles into the flag once.
 // =============================================================================
 export const TITLES = [
   'General Manager',

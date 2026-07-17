@@ -56,7 +56,9 @@ export default function OrderForm({ onCreated }) {
   // Dynamic category grouping — the admin's catalog drives the layout.
   const byCategory = useMemo(() => {
     const map = new Map()
-    for (const p of (catalog ?? [])) {
+    // Unpriced packages (no retail set anywhere yet) never reach the order
+    // screen — a store admin prices them under Packages & Pricing first.
+    for (const p of (catalog ?? []).filter((x) => x.priced !== false)) {
       const key = p.category || 'Other'
       if (!map.has(key)) map.set(key, [])
       map.get(key).push(p)
@@ -229,6 +231,12 @@ export default function OrderForm({ onCreated }) {
         <div style={{ marginTop: 18, fontSize: 13.5, color: X.slate, lineHeight: 1.55 }}>
           No program is assigned to this store yet. Your XPEL administrator sets each
           store's program and pricing — packages appear here the moment it's assigned.
+        </div>
+      )}
+      {catalog !== null && !loadErr && catalog.length > 0 && catalog.every((x) => x.priced === false) && (
+        <div style={{ marginTop: 18, fontSize: 13.5, color: X.slate, lineHeight: 1.55 }}>
+          Your program's packages haven't been priced yet. A store admin sets retail under
+          Packages &amp; Pricing — they'll appear here the moment prices are set.
         </div>
       )}
 

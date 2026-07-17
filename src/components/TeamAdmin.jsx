@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getStoreTeam, setUserTitle, claimStoreUser } from '../lib/db'
+import { getStoreTeam, setUserTitle, setStoreAdmin, claimStoreUser } from '../lib/db'
 import { adminCreateUser } from '../lib/adminDb'
-import { TITLES, isManagerTitle } from '../lib/titles'
+import { TITLES } from '../lib/titles'
 import { COLOR as X, FONT, CARD } from '../lib/theme'
 
 // =============================================================================
-// Team — store managers run their own roster:
-//   • Add users to their store (no XPEL admin needed) with a preset title.
-//   • Change titles anytime. Titles power Performance → Top sellers and
-//     By department, and titles containing "Manager" unlock pricing,
-//     discounts, and this tab.
-// The database enforces the same rules: a manager can only claim brand-new
-// unassigned accounts into their OWN store, and only managers can do it.
+// Team — store admins run their own roster end-to-end:
+//   • Add users: the account is created AND assigned to this store in one
+//     step by a database function that fails loudly if anything is off —
+//     no more silently unassigned users.
+//   • Titles are reporting labels (Top sellers / By department).
+//   • The STORE ADMIN checkbox is the permission: it unlocks pricing,
+//     discounts, and this tab, and store admins can grant/revoke it for
+//     teammates. XPEL admin only ever needs to create the first one.
 // =============================================================================
 export default function TeamAdmin() {
   const { profile, isManager } = useAuth()
@@ -34,8 +35,8 @@ export default function TeamAdmin() {
         <button style={btnPrimary} onClick={() => setAdding(true)}>+ Add Team Member</button>
       </div>
       <div style={{ fontSize: 13, color: X.slate, marginBottom: 12, maxWidth: 660, lineHeight: 1.5 }}>
-        Everyone at your store. Titles drive the Top sellers and By department reports;
-        titles containing “Manager” also unlock pricing, discounts, and this tab.
+        Everyone at your store. Titles are reporting labels (Top sellers / By department);
+        the <b>Store admin</b> checkbox is what unlocks pricing, discounts, and this tab.
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8, fontSize: 13 }}>{err}</div>}
 
@@ -53,26 +54,37 @@ export default function TeamAdmin() {
 function MemberRow({ m, me, onChanged, onError }) {
   const [busy, setBusy] = useState(false)
 
-  async function change(title) {
-    if (m.id === me && isManagerTitle(m.title) && !isManagerTitle(title)) {
-      if (!window.confirm('This removes YOUR manager access (pricing, discounts, team management). Continue?')) return
-    }
+  async function changeTitle(title) {
     setBusy(true)
     try { await setUserTitle(m.id, title || null); await onChanged() }
     catch (e) { onError(e.message) } finally { setBusy(false) }
   }
 
+  async function toggleAdmin(next) {
+    if (m.id === me && !next) {
+      if (!window.confirm('This removes YOUR store-admin access (pricing, discounts, team management). Continue?')) return
+    }
+    setBusy(true)
+    try { await setStoreAdmin(m.id, next); await onChanged() }
+    catch (e) { onError(e.message) } finally { setBusy(false) }
+  }
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: `1px solid ${X.line}` }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: `1px solid ${X.line}`, flexWrap: 'wrap' }}>
+      <div style={{ flex: 1, minWidth: 160 }}>
         <div style={{ fontWeight: 600, fontSize: 14 }}>
           {m.full_name || m.email}
           {m.id === me && <span style={{ color: X.slate, fontWeight: 400 }}> (you)</span>}
         </div>
         <div style={{ fontSize: 12, color: X.slate }}>{m.email}</div>
       </div>
-      {isManagerTitle(m.title) && <span style={mgrPill}>Manager</span>}
-      <select value={m.title || ''} disabled={busy} onChange={(e) => change(e.target.value)} style={sel}>
+      {m.is_store_admin && <span style={mgrPill}>Store admin</span>}
+      <label style={adminToggle} title="Store admins can edit pricing, apply discounts, and manage this team">
+        <input type="checkbox" checked={!!m.is_store_admin} disabled={busy} onChange={(e) => toggleAdmin(e.target.checked)} />
+        Store admin
+      </label>
+      <select value={m.title || ''} disabled={busy} onChange={(e) => changeTitle(e.target.value)} style={sel}
+        title="Reporting label (Top sellers / By department)">
         <option value="">No title</option>
         {TITLES.map((t) => <option key={t} value={t}>{t}</option>)}
       </select>
@@ -81,7 +93,7 @@ function MemberRow({ m, me, onChanged, onError }) {
 }
 
 function AddCard({ profile, onDone, onCancel }) {
-  const [f, setF] = useState({ full_name: '', email: '', password: '', title: 'Sales Advisor' })
+  const [f, setF] = useState({ full_name: '', email: '', password: '', title: 'Sales Advisor', is_store_admin: false })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -99,8 +111,7 @@ function AddCard({ profile, onDone, onCancel }) {
       await claimStoreUser(user.id, {
         full_name: f.full_name.trim(),
         title: f.title || null,
-        group_id: profile.group_id,
-        dealership_id: profile.dealership_id,
+        is_store_admin: f.is_store_admin,
       })
       setMsg(`✓ ${f.email.trim()} added to your store. Share the temporary password with them.`)
       setTimeout(onDone, 1400)
@@ -115,11 +126,16 @@ function AddCard({ profile, onDone, onCancel }) {
         <input placeholder="Email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} style={inp} />
         <input placeholder="Temporary password (6+ chars)" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} style={inp} />
         <select value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} style={inp}
-          title='Titles containing "Manager" unlock pricing, discounts, and team management'>
-          {TITLES.map((t) => <option key={t} value={t}>{t}{isManagerTitle(t) ? ' — manager' : ''}</option>)}
+          title="Reporting label — permissions come from the Store admin checkbox below">
+          {TITLES.map((t) => <option key={t} value={t}>{t}</option>)}
           <option value="">No title</option>
         </select>
       </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13, cursor: 'pointer' }}
+        title="Store admins can edit pricing, apply discounts, and manage this team">
+        <input type="checkbox" checked={f.is_store_admin} onChange={(e) => setF({ ...f, is_store_admin: e.target.checked })} />
+        Grant store admin (pricing, discounts, team management)
+      </label>
       {!ready && <div style={{ marginTop: 10, fontSize: 12.5, color: X.slate }}>Still needed: {missing.join(', ')}.</div>}
       {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.startsWith('✓') ? X.green : X.red }}>{msg}</div>}
       <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
@@ -136,4 +152,5 @@ const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borde
 const btnGhost = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '10px 16px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
 const sel = { border: `1px solid ${X.gray}`, borderRadius: 10, padding: '9px 10px', fontSize: 13, fontFamily: FONT.body, background: '#FFFFFD', minWidth: 210 }
 const inp = { width: '100%', boxSizing: 'border-box', background: '#FFFFFD', border: `1px solid ${X.gray}`, borderRadius: 10, padding: '10px 11px', fontSize: 14, fontFamily: FONT.body }
+const adminToggle = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: X.slate, cursor: 'pointer', fontFamily: FONT.body, whiteSpace: 'nowrap' }
 const mgrPill = { fontFamily: FONT.body, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: X.black, background: X.yellow, borderRadius: 999, padding: '4px 10px', flexShrink: 0 }

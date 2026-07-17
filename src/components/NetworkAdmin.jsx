@@ -30,7 +30,7 @@ export default function NetworkAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 19, fontWeight: FONT.headingWeight }}>Dealer Network</h3>
+        <h3 style={{ margin: 0, fontSize: 19, fontWeight: FONT.headingWeight }}>Dealerships</h3>
         <div style={{ display: 'flex', gap: 8 }}>
           <input placeholder="New dealer group name" value={newGroup} onChange={(e) => setNewGroup(e.target.value)} style={input} />
           <button style={btnPrimary} onClick={addGroup}>+ Add Group</button>
@@ -130,8 +130,8 @@ function StoreRow({ store, dealerName, products, programs, programProducts, pric
         <input value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} style={{ ...input, flex: 1, minWidth: 100 }} placeholder="City" />
         <input value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} style={{ ...input, width: 70 }} placeholder="ST" />
         {dealerName
-          ? <span style={svcChip} title="Serviced by this XPEL Authorized Dealer (assigned in the Authorized Dealers tab)">{dealerName}</span>
-          : <span style={{ ...svcChip, color: X.red, borderColor: 'rgba(125,20,25,0.35)' }} title="No authorized dealer services this rooftop yet — assign one in the Authorized Dealers tab">No dealer</span>}
+          ? <span style={svcChip} title="Serviced by this XPEL Authorized Installer (assigned in the Authorized Installers tab)">{dealerName}</span>
+          : <span style={{ ...svcChip, color: X.red, borderColor: 'rgba(125,20,25,0.35)' }} title="No authorized installer services this rooftop yet — assign one in the Authorized Installers tab">No installer</span>}
         <button
           style={{ ...btnGhost, ...(program ? {} : { color: X.red, borderColor: 'rgba(125,20,25,0.35)' }) }}
           title={program ? `Program & per-store pricing for ${store.name}` : "No program assigned — this store's order menu is empty until one is"}

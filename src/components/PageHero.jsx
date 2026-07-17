@@ -38,7 +38,7 @@ export default function PageHero() {
     if (role === 'installer') {
       getAuthorizedDealers().then((ds) => {
         const d = ds.find((x) => x.id === dealerId) || ds[0]
-        if (on && d) setPlace(`${d.name} — XPEL Authorized Dealer`)
+        if (on && d) setPlace(`${d.name} — XPEL Authorized Installer`)
       }).catch(() => {})
     }
     if (role === 'dealership') {

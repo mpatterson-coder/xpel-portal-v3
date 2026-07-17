@@ -42,7 +42,8 @@ export default function StorePricingAdmin() {
       <div style={{ fontSize: 13, color: X.slate, marginBottom: 14, maxWidth: 700, lineHeight: 1.5 }}>
         Rename how packages appear on <b>your</b> order screen and set <b>your</b> retail price
         (never below wholesale). Your installer always sees the official package name, and
-        changes apply to new orders only — placed orders keep their prices.
+        changes apply to new orders only — placed orders keep their prices. New packages from
+        your installer arrive <b>unpriced</b> and stay hidden from ordering until you set a retail here.
       </div>
       {err && <div style={{ color: X.red, marginBottom: 10, fontSize: 13 }}>{err}</div>}
       {items === null && !err && <div style={{ color: X.slate, fontSize: 14 }}>Loading…</div>}
@@ -118,6 +119,11 @@ function Row({ p, dealershipId, onChanged, onError }) {
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.canonical_name}</div>
         {p.tier && <div style={{ fontSize: 11, color: X.slate }}>{p.tier}</div>}
+        {!p.priced && (
+          <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#8A6100', marginTop: 2 }}>
+            Not priced — hidden from ordering
+          </div>
+        )}
       </div>
       <input value={alias} disabled={busy} onChange={(e) => setAlias(e.target.value)} onBlur={commitAlias}
         placeholder={p.canonical_name}
@@ -125,10 +131,10 @@ function Row({ p, dealershipId, onChanged, onError }) {
       <div style={{ textAlign: 'right', color: X.slate }}>{money(wholesale)}</div>
       <input type="number" min="0" step="0.01" value={price} disabled={busy}
         onChange={(e) => setPrice(e.target.value)} onBlur={commitPrice}
-        placeholder={`Base ${money(Number(p.base_price), 0)}`}
+        placeholder={p.priced && p.base_price != null ? `Base ${money(Number(p.base_price), 0)}` : 'Set retail'}
         title="Your retail (blank = base price). Can't go below wholesale."
         style={{ ...inp, textAlign: 'right', fontWeight: p.price_overridden ? 700 : 400 }} />
-      <div style={{ textAlign: 'right', color: X.green, fontWeight: 600 }}>+{money(margin)}</div>
+      <div style={{ textAlign: 'right', color: X.green, fontWeight: 600 }}>{p.priced ? <>+{money(margin)}</> : <span style={{ color: X.slate, fontWeight: 400 }}>—</span>}</div>
     </div>
   )
 }

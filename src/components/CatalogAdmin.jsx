@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getAllProducts, createProduct, updateProduct } from '../lib/adminDb'
+import { getAuthorizedDealers } from '../lib/db'
 import { COLOR as X, FONT, CARD, money } from '../lib/theme'
 import ProgramsAdmin from './ProgramsAdmin'
 
@@ -9,13 +10,14 @@ import ProgramsAdmin from './ProgramsAdmin'
 // active/retired status. Nothing is stock or locked.
 export default function CatalogAdmin() {
   const [products, setProducts] = useState([])
+  const [installers, setInstallers] = useState([])
   const [err, setErr] = useState('')
   const [adding, setAdding] = useState(false)
   const [openId, setOpenId] = useState(null)
 
   const load = () =>
-    getAllProducts()
-      .then(setProducts)
+    Promise.all([getAllProducts(), getAuthorizedDealers()])
+      .then(([p, ad]) => { setProducts(p); setInstallers(ad) })
       .catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
 
@@ -38,11 +40,22 @@ export default function CatalogAdmin() {
                  onClick={() => setOpenId(openId === p.id ? null : p.id)}>
               <div style={{ flex: 2, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
-                <div style={{ fontSize: 11.5, color: X.slate }}>{p.category}{p.tier ? ` · ${p.tier}` : ''} · {p.sku}</div>
+                <div style={{ fontSize: 11.5, color: X.slate }}>
+                  {p.category}{p.tier ? ` · ${p.tier}` : ''} · {p.sku}
+                  {p.authorized_dealer_id
+                    ? <span style={{ color: '#8A6100', fontWeight: 700 }}> · by {installers.find((d) => d.id === p.authorized_dealer_id)?.name ?? 'installer'}</span>
+                    : ' · XPEL house'}
+                </div>
               </div>
-              <div style={{ width: 90, textAlign: 'right', fontWeight: 700 }}>{money(p.unit_price)}</div>
+              <div style={{ width: 90, textAlign: 'right', fontWeight: 700 }}>
+                {p.unit_price != null
+                  ? money(p.unit_price)
+                  : <span style={{ fontSize: 10, fontWeight: 800, color: '#8A6100', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unpriced</span>}
+              </div>
               <div style={{ width: 70, textAlign: 'right', color: X.green, fontSize: 13 }}>
-                {Number(p.unit_price) ? Math.round(((p.unit_price - p.cost) / p.unit_price) * 100) : 0}%
+                {p.unit_price != null
+                  ? `${Number(p.unit_price) ? Math.round(((p.unit_price - p.cost) / p.unit_price) * 100) : 0}%`
+                  : '—'}
               </div>
               <span style={{ ...badge, background: p.active ? X.green : X.gray, color: p.active ? '#fff' : X.slate }}>
                 {p.active ? 'Active' : 'Retired'}
@@ -73,11 +86,12 @@ function ProductEditor({ product, categories, onSave, onToggleActive, onError, i
     category: product?.category || '',
     tier: product?.tier || '',
     description: product?.description || '',
-    unit_price: product ? String(product.unit_price) : '',
+    unit_price: product?.unit_price != null ? String(product.unit_price) : '',
     cost: product ? String(product.cost) : '',
   })
   const [busy, setBusy] = useState(false)
-  const ready = f.name.trim() && f.category.trim() && f.unit_price !== '' && (isNew ? f.sku.trim() : true)
+  // Edits may leave list price BLANK = unpriced (hidden from ordering until a store or XPEL prices it).
+  const ready = f.name.trim() && f.category.trim() && (isNew ? f.sku.trim() && f.unit_price !== '' : true)
 
   async function save() {
     setBusy(true)
@@ -85,7 +99,7 @@ function ProductEditor({ product, categories, onSave, onToggleActive, onError, i
       const patch = {
         name: f.name.trim(), category: f.category.trim(), tier: f.tier.trim() || null,
         description: f.description.trim() || null,
-        unit_price: Number(f.unit_price), cost: Number(f.cost || 0),
+        unit_price: f.unit_price === '' ? null : Number(f.unit_price), cost: Number(f.cost || 0),
       }
       if (isNew) patch.sku = f.sku.trim()
       await onSave(patch)
@@ -110,7 +124,7 @@ function ProductEditor({ product, categories, onSave, onToggleActive, onError, i
         <Field label="Tier / line (optional)">
           <input value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} style={input} placeholder="e.g. Ultimate Plus" />
         </Field>
-        <Field label="List price">
+        <Field label="List price (blank = unpriced / hidden)">
           <input type="number" value={f.unit_price} onChange={(e) => setF({ ...f, unit_price: e.target.value })} style={input} />
         </Field>
         <Field label="Cost (for margin)">

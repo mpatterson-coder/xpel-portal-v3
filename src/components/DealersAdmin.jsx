@@ -38,24 +38,24 @@ export default function DealersAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
-        <h3 style={{ margin: 0, fontSize: 19, fontWeight: FONT.headingWeight }}>XPEL Authorized Dealers</h3>
+        <h3 style={{ margin: 0, fontSize: 19, fontWeight: FONT.headingWeight }}>XPEL Authorized Installers</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input placeholder="Dealer name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} style={{ ...input, width: 220 }} />
+          <input placeholder="Installer name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} style={{ ...input, width: 220 }} />
           <input placeholder="City" value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} style={{ ...input, width: 130 }} />
           <input placeholder="State" value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} style={{ ...input, width: 70 }} />
-          <button style={{ ...btnPrimary, opacity: f.name.trim() ? 1 : 0.5 }} disabled={!f.name.trim()} onClick={add}>+ Add Dealer</button>
+          <button style={{ ...btnPrimary, opacity: f.name.trim() ? 1 : 0.5 }} disabled={!f.name.trim()} onClick={add}>+ Add Installer</button>
         </div>
       </div>
       <div style={{ fontSize: 12.5, color: X.slate, marginBottom: 14, maxWidth: 720 }}>
-        The installer businesses in the network. Assign each dealer the rooftops it services here;
-        assign installer <b>users</b> to their dealer in the Users tab. An installer sees exactly the
-        orders of the rooftops their dealer services — even across dealer groups.
+        The installer businesses in the network. Assign each installer the rooftops it services here;
+        assign installer <b>users</b> to their shop in the Users tab. An installer sees exactly the
+        orders of the rooftops their shop services — even across dealership groups.
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
 
       {dealers.length === 0 && (
         <div style={{ ...panel, color: X.slate, fontSize: 14 }}>
-          No authorized dealers yet. Add the first one above — then assign its rooftops and its installer users.
+          No authorized installers yet. Add the first one above — then assign its rooftops and its installer users.
         </div>
       )}
 

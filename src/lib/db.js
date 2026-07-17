@@ -47,6 +47,9 @@ export async function getCatalog() {
       base_price: p.unit_price,
       price_overridden: priceByProduct.has(p.id),
       effective_price: priceByProduct.has(p.id) ? priceByProduct.get(p.id) : p.unit_price,
+      // Unpriced packages (installer-created, no retail anywhere yet) stay
+      // hidden from the order screen until a store admin or XPEL prices them.
+      priced: (priceByProduct.has(p.id) ? priceByProduct.get(p.id) : p.unit_price) != null,
       // The installer's wholesale for this store's program (catalog default when unset).
       effective_wholesale: row.wholesale ?? p.cost,
     }))
@@ -84,7 +87,7 @@ export async function getAuthorizedDealers() {
 export async function getStoreTeam(dealership_id) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, email, title, role, dealership_id, created_at')
+    .select('id, full_name, email, title, role, is_store_admin, dealership_id, created_at')
     .eq('dealership_id', dealership_id)
     .eq('role', 'dealership')
     .order('full_name')
@@ -93,18 +96,31 @@ export async function getStoreTeam(dealership_id) {
 }
 
 export async function setUserTitle(userId, title) {
-  const { error } = await supabase.from('profiles').update({ title }).eq('id', userId)
+  // .select() makes a security-filtered no-op detectable instead of silent.
+  const { data, error } = await supabase.from('profiles').update({ title }).eq('id', userId).select('id')
   if (error) throw error
+  if (!data?.length) throw new Error('Not permitted — only store admins can update teammates at their own store.')
 }
 
-// A manager pulls a freshly created (unassigned) account into their own store.
-// The guard trigger only permits this exact claim — anything else stays pinned.
-export async function claimStoreUser(userId, { full_name, title, group_id, dealership_id }) {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ full_name, title: title || null, group_id, dealership_id })
-    .eq('id', userId)
+// Grant or revoke the store-admin flag for a teammate at your own store.
+export async function setStoreAdmin(userId, is_store_admin) {
+  const { data, error } = await supabase.from('profiles').update({ is_store_admin }).eq('id', userId).select('id')
   if (error) throw error
+  if (!data?.length) throw new Error('Not permitted — only store admins can change this, and only at their own store.')
+}
+
+// A store admin pulls a freshly created (unassigned) account into their own
+// store — via a database function that verifies everything and FAILS LOUDLY
+// with the reason if it can't, so a user can never end up half-created.
+export async function claimStoreUser(userId, { full_name, title, is_store_admin }) {
+  const { data, error } = await supabase.rpc('claim_user_for_store', {
+    p_user_id: userId,
+    p_full_name: full_name ?? null,
+    p_title: title ?? null,
+    p_is_store_admin: !!is_store_admin,
+  })
+  if (error) throw error
+  return data
 }
 
 // The store's display name for one package. Blank clears back to the official name.

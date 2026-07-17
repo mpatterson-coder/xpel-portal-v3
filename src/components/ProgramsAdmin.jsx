@@ -47,7 +47,7 @@ export default function ProgramsAdmin({ products, mode = 'admin', dealerId = nul
                  each store controls its own retail.</>
               : <>Named package sets with the owning shop's <b>wholesale</b> per package. Programs are <b>linked</b> —
                  editing one updates every store on it instantly. Store retail lives on the rooftop
-                 (Network → Program &amp; Pricing).</>}
+                 (Dealerships → Program &amp; Pricing).</>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

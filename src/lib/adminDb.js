@@ -13,7 +13,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient'
 export async function getAllProfiles() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, title, group_id, dealership_id, authorized_dealer_id, created_at, group:dealership_groups(name), dealership:dealerships(name), dealer:authorized_dealers(name)')
+    .select('id, email, full_name, role, title, is_store_admin, group_id, dealership_id, authorized_dealer_id, created_at, group:dealership_groups(name), dealership:dealerships(name), dealer:authorized_dealers(name)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data ?? []
@@ -43,7 +43,7 @@ export async function adminCreateUser({ email, password, full_name }) {
 // Assign or transfer a user: change role, group, and/or store.
 // Passing nulls for group/dealership (with role 'dealership') deactivates
 // them back to the zero-access holding screen.
-export async function updateProfileAssignment(profileId, { role, group_id, dealership_id, authorized_dealer_id, full_name, title }) {
+export async function updateProfileAssignment(profileId, { role, group_id, dealership_id, authorized_dealer_id, full_name, title, is_store_admin }) {
   const patch = {
     role,
     group_id: group_id ?? null,
@@ -52,6 +52,7 @@ export async function updateProfileAssignment(profileId, { role, group_id, deale
   }
   if (full_name !== undefined) patch.full_name = full_name
   if (title !== undefined) patch.title = title
+  if (is_store_admin !== undefined) patch.is_store_admin = is_store_admin
   const { data, error } = await supabase
     .from('profiles')
     .update(patch)
@@ -252,14 +253,26 @@ export async function getAllProducts() {
   return data ?? []
 }
 
-export async function createProduct({ sku, name, category, tier, description, unit_price, cost }) {
+export async function createProduct({ sku, name, category, tier, description, unit_price, cost, authorized_dealer_id = null }) {
   const { data, error } = await supabase
     .from('products')
-    .insert({ sku, name, category, tier: tier || null, description: description || null, unit_price, cost })
+    .insert({
+      sku, name, category,
+      tier: tier || null,
+      description: description || null,
+      unit_price: unit_price ?? null, // null = unpriced (hidden from ordering until a store/XPEL prices it)
+      cost,
+      authorized_dealer_id,           // null = XPEL house package; otherwise the owning installer
+    })
     .select()
     .single()
   if (error) throw error
   return data
+}
+
+export async function deleteProduct(id) {
+  const { error } = await supabase.from('products').delete().eq('id', id)
+  if (error) throw error
 }
 
 export async function updateProduct(id, patch) {
