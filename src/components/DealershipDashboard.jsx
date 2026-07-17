@@ -7,6 +7,7 @@ import TabNav from './TabNav'
 import PerformanceDashboard from './PerformanceDashboard'
 import StorePricingAdmin from './StorePricingAdmin'
 import TeamAdmin from './TeamAdmin'
+import MessagesHub from './MessagesHub'
 import { usePersistentState } from '../lib/uiState'
 import { COLOR } from '../lib/theme'
 
@@ -26,6 +27,7 @@ export default function DealershipDashboard() {
   const tabs = {
     order: 'New Order',
     ...(isManager ? { pricing: 'Packages & Pricing', team: 'Team' } : {}),
+    messages: 'Messages',
     performance: 'Performance',
   }
   // If a saved view is no longer available to this user (say a title change),
@@ -46,6 +48,7 @@ export default function DealershipDashboard() {
       )}
       {active === 'pricing' && <StorePricingAdmin />}
       {active === 'team' && <TeamAdmin />}
+      {active === 'messages' && <MessagesHub mode="dealership" />}
       {active === 'performance' && <PerformanceDashboard mode="dealership" />}
     </div>
   )

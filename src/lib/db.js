@@ -138,6 +138,82 @@ export async function setPackageAlias(dealership_id, product_id, display_name) {
   }
 }
 
+// ---- Chat (store <-> servicing installer) -----------------------------------
+// RLS keeps every conversation private to the store's users and the servicing
+// shop's users — there is deliberately NO XPEL-admin read access.
+
+// One channel's messages: the store's general channel (order_id null) or a
+// specific order's thread. Oldest first, capped for sanity.
+export async function getMessages(dealership_id, order_id = null) {
+  let q = supabase
+    .from('messages')
+    .select('*')
+    .eq('dealership_id', dealership_id)
+    .order('created_at', { ascending: true })
+    .limit(200)
+  q = order_id ? q.eq('order_id', order_id) : q.is('order_id', null)
+  const { data, error } = await q
+  if (error) throw error
+  return data ?? []
+}
+
+export async function sendMessage(profile, { dealership_id, authorized_dealer_id, order_id = null, body }) {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      dealership_id,
+      authorized_dealer_id,
+      order_id,
+      sender_id: profile.id,
+      sender_role: profile.role,
+      sender_name: profile.full_name,
+      body: body.trim(),
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// Opening (or polling) a channel stamps it read for this user.
+export async function markChannelRead(user_id, dealership_id, order_id = null) {
+  const { error } = await supabase.from('chat_reads').upsert(
+    { user_id, dealership_id, order_id, last_read_at: new Date().toISOString() },
+    { onConflict: 'user_id,dealership_id,order_id' },
+  )
+  if (error) throw error
+}
+
+// Unread counts per channel (last 30 days), computed from my read stamps.
+// Key format: `${dealership_id}|${order_id ?? 'general'}`.
+export async function getUnreadState(myUserId) {
+  const since = new Date(Date.now() - 30 * 86400000).toISOString()
+  const [{ data: reads, error: rErr }, { data: msgs, error: mErr }] = await Promise.all([
+    supabase.from('chat_reads').select('dealership_id, order_id, last_read_at'),
+    supabase
+      .from('messages')
+      .select('dealership_id, order_id, created_at, sender_id')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(500),
+  ])
+  if (rErr) throw rErr
+  if (mErr) throw mErr
+  const readAt = new Map((reads ?? []).map((r) => [`${r.dealership_id}|${r.order_id ?? 'general'}`, new Date(r.last_read_at)]))
+  const counts = new Map()
+  let total = 0
+  for (const m of msgs ?? []) {
+    if (m.sender_id === myUserId) continue
+    const key = `${m.dealership_id}|${m.order_id ?? 'general'}`
+    const seen = readAt.get(key)
+    if (!seen || new Date(m.created_at) > seen) {
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+      total++
+    }
+  }
+  return { counts, total }
+}
+
 // ---- Orders -----------------------------------------------------------------
 
 // All orders the current user may see (RLS scopes this automatically:

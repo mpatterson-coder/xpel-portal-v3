@@ -5,6 +5,7 @@ import { getAllPrograms, getAllProducts, setDealershipProgram } from '../lib/adm
 import { usePersistentState } from '../lib/uiState'
 import ProgramsAdmin from './ProgramsAdmin'
 import InstallerCatalog from './InstallerCatalog'
+import MessagesHub from './MessagesHub'
 import { Spinner } from './ui'
 import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import StatusTimeline from './StatusTimeline'
@@ -26,11 +27,12 @@ export default function InstallerDashboard() {
   const [view, setView] = usePersistentState('xpel.installer.view', 'queue')
   return (
     <div style={{ maxWidth: 1000 }}>
-      <TabNav tabs={{ queue: 'Fulfillment Queue', stores: 'My Stores', packages: 'My Packages', programs: 'Programs', performance: 'Performance' }} value={view} onChange={setView} />
+      <TabNav tabs={{ queue: 'Fulfillment Queue', stores: 'My Stores', packages: 'My Packages', programs: 'Programs', messages: 'Messages', performance: 'Performance' }} value={view} onChange={setView} />
       {view === 'queue' && <QueueView />}
       {view === 'stores' && <StoresView />}
       {view === 'packages' && <InstallerCatalog />}
       {view === 'programs' && <ProgramsView />}
+      {view === 'messages' && <MessagesHub mode="installer" />}
       {view === 'performance' && <PerformanceDashboard mode="installer" />}
     </div>
   )
