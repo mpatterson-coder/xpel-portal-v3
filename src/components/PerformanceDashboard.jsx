@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts'
-import { fetchPerformanceRows, applyFilters, computeTotals, timeSeries, breakdown, filterOptions } from '../lib/analytics'
+import { fetchPerformanceRows, applyFilters, computeTotals, timeSeries, breakdown, filterOptions, ordersFromRows, makeBucketKey } from '../lib/analytics'
+import { downloadCsv } from '../lib/csv'
 import { usePersistentState } from '../lib/uiState'
-import { COLOR as X, FONT, CARD, money } from '../lib/theme'
+import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import { Eyebrow, Sheen, Spinner, useCountUp } from './ui'
 
 // =============================================================================
@@ -34,7 +35,7 @@ const daysAgoStr = (n) => {
 
 const EMPTY_FILTERS = { preset: 'all', from: '', to: '', category: '', productId: '', groupId: '' }
 
-export default function PerformanceDashboard({ mode }) {
+export default function PerformanceDashboard({ mode, onOpenOrder }) {
   const [rows, setRows] = useState(null)   // null = loading
   const [err, setErr] = useState('')
   const [fRaw, setF] = usePersistentState(`xpel.perf.${mode}.filters`, EMPTY_FILTERS)
@@ -73,6 +74,27 @@ export default function PerformanceDashboard({ mode }) {
   // Which money column drives bars/sorting in this mode.
   const valueKey = mode === 'installer' ? 'wholesale' : 'retail'
   const fm0 = (n) => money(n, 0)
+
+  // Drill-down: every number opens the list of orders behind it.
+  const [drill, setDrill] = useState(null)
+  const openDrill = (title, drillRows, metric, only = null) =>
+    setDrill({ title, rows: drillRows, metric, only })
+
+  // Full filtered dataset as a spreadsheet (role-appropriate columns).
+  const exportAll = () => {
+    const list = ordersFromRows(filtered)
+    const base = ['Order #', 'Date', 'Status', 'Customer', 'Vehicle', mode === 'dealership' ? 'Seller' : 'Store', 'Packages']
+    const moneyCols = mode === 'installer'
+      ? ['Wholesale', 'Completion days']
+      : ['Retail', 'Wholesale', 'Margin', 'Discount', 'Completion days']
+    downloadCsv(`xpel-performance-${mode}.csv`, [...base, ...moneyCols], list.map((o) => [
+      o.orderNumber, dateUS(o.date), o.status, o.customerName, o.vehicle,
+      mode === 'dealership' ? o.sellerName : o.dealershipName, o.units,
+      ...(mode === 'installer'
+        ? [o.wholesale.toFixed(2), o.completionDays != null ? o.completionDays.toFixed(1) : '']
+        : [o.retail.toFixed(2), o.wholesale.toFixed(2), o.margin.toFixed(2), o.discount.toFixed(2), o.completionDays != null ? o.completionDays.toFixed(1) : '']),
+    ]))
+  }
   const productsInCategory = f.category ? opts.products.filter((p) => p.category === f.category) : opts.products
   const filtersActive = f.preset !== 'all' || f.category || f.productId || f.groupId
 
@@ -117,6 +139,9 @@ export default function PerformanceDashboard({ mode }) {
         {filtersActive && (
           <button onClick={() => setF(EMPTY_FILTERS)} style={clearBtn}>Clear filters</button>
         )}
+        {rows !== null && filtered.length > 0 && (
+          <button onClick={exportAll} style={clearBtn} title="Download every order in the current view as a spreadsheet">Export CSV</button>
+        )}
       </div>
 
       {rows === null && !err && <Spinner label="Loading performance data…" />}
@@ -127,28 +152,42 @@ export default function PerformanceDashboard({ mode }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
             {mode === 'dealership' && (
               <>
-                <Kpi label="Revenue (retail)" value={totals.retail} format={fm0} />
-                <Kpi label="Your margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of revenue`} />
-                <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages sold`} />
-                <Kpi label="Avg order" value={totals.avgOrder} format={fm0} />
-                <Kpi label="Discounts given" value={totals.discount} format={fm0} sub="off list price" />
+                <Kpi label="Revenue (retail)" value={totals.retail} format={fm0}
+                  onClick={() => openDrill('Revenue (retail)', filtered, 'retail')} />
+                <Kpi label="Your margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of revenue`}
+                  onClick={() => openDrill('Your margin', filtered, 'margin')} />
+                <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages sold`}
+                  onClick={() => openDrill('All orders', filtered, 'retail')} />
+                <Kpi label="Avg order" value={totals.avgOrder} format={fm0}
+                  onClick={() => openDrill('All orders (avg basis)', filtered, 'retail')} />
+                <Kpi label="Discounts given" value={totals.discount} format={fm0} sub="off list price"
+                  onClick={() => openDrill('Discounted orders', filtered, 'discount', (o) => o.discount > 0)} />
               </>
             )}
             {mode === 'installer' && (
               <>
-                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0} />
-                <Kpi label="Jobs" value={totals.orders} />
-                <Kpi label="Packages installed" value={totals.units} />
-                <Kpi label="Jobs completed" value={totals.completed} sub={`avg ${fm0(totals.avgWholesaleOrder)} / job`} />
-                <Kpi label="Avg completion" value={totals.avgCompletionDays ?? '—'} format={(v) => `${v.toFixed(1)} days`} sub="submitted → completed" />
+                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0}
+                  onClick={() => openDrill('Wholesale revenue', filtered, 'wholesale')} />
+                <Kpi label="Jobs" value={totals.orders}
+                  onClick={() => openDrill('All jobs', filtered, 'wholesale')} />
+                <Kpi label="Packages installed" value={totals.units}
+                  onClick={() => openDrill('Packages installed', filtered, 'units')} />
+                <Kpi label="Jobs completed" value={totals.completed} sub={`avg ${fm0(totals.avgWholesaleOrder)} / job`}
+                  onClick={() => openDrill('Completed jobs', filtered, 'wholesale', (o) => o.status === 'completed')} />
+                <Kpi label="Avg completion" value={totals.avgCompletionDays ?? '—'} format={(v) => `${v.toFixed(1)} days`} sub="submitted → completed"
+                  onClick={() => openDrill('Completed jobs — days to complete', filtered, 'completionDays', (o) => o.completionDays != null)} />
               </>
             )}
             {mode === 'admin' && (
               <>
-                <Kpi label="Retail revenue" value={totals.retail} format={fm0} />
-                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0} />
-                <Kpi label="Dealer margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of retail`} />
-                <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages`} />
+                <Kpi label="Retail revenue" value={totals.retail} format={fm0}
+                  onClick={() => openDrill('Retail revenue', filtered, 'retail')} />
+                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0}
+                  onClick={() => openDrill('Wholesale revenue', filtered, 'wholesale')} />
+                <Kpi label="Dealer margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of retail`}
+                  onClick={() => openDrill('Dealer margin', filtered, 'margin')} />
+                <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages`}
+                  onClick={() => openDrill('All orders', filtered, 'retail')} />
               </>
             )}
           </div>
@@ -161,7 +200,13 @@ export default function PerformanceDashboard({ mode }) {
             <>
               <Panel title="Revenue over time">
                 <ResponsiveContainer width="100%" height={250}>
-                  <ComposedChart data={series} margin={{ top: 8, right: 8, bottom: 4, left: 8 }}>
+                  <ComposedChart data={series} margin={{ top: 8, right: 8, bottom: 4, left: 8 }}
+                    onClick={(e) => {
+                      const lbl = e?.activeLabel
+                      if (!lbl) return
+                      const keyOf = makeBucketKey(filtered)
+                      openDrill(lbl, filtered.filter((r) => keyOf(r.date) === lbl), valueKey)
+                    }}>
                     <defs>
                       <linearGradient id="xPrimaryFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={X.black} stopOpacity={0.10} />
@@ -183,10 +228,12 @@ export default function PerformanceDashboard({ mode }) {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
                 <Panel title="Package performance">
-                  <BarList items={byProduct} valueKey={valueKey} totals={totals} mode={mode} />
+                  <BarList items={byProduct} valueKey={valueKey} totals={totals} mode={mode}
+                    onSelect={(i) => openDrill(i.name, filtered.filter((r) => r.productName === i.name), valueKey)} />
                 </Panel>
                 <Panel title="Product line mix">
-                  <BarList items={byCategory} valueKey={valueKey} totals={totals} mode={mode} />
+                  <BarList items={byCategory} valueKey={valueKey} totals={totals} mode={mode}
+                    onSelect={(i) => openDrill(i.name, filtered.filter((r) => r.category === i.name), valueKey)} />
                 </Panel>
               </div>
 
@@ -202,7 +249,10 @@ export default function PerformanceDashboard({ mode }) {
                         </thead>
                         <tbody>
                           {[...bySeller].sort((a, b) => b.retail - a.retail).slice(0, 12).map((sl) => (
-                            <tr key={sl.key}>
+                            <tr key={sl.key} style={{ cursor: 'pointer' }} title="See this person's orders"
+                                onClick={() => openDrill(sl.name, filtered.filter((r) => r.sellerName === sl.name), 'retail')}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = X.bg }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = '' }}>
                               <td style={sellerTd}>
                                 <div style={{ fontWeight: 600 }}>{sl.name}</div>
                                 <div style={{ fontSize: 11.5, color: X.slate }}>{sellerTitles.get(sl.name) ?? ''}</div>
@@ -218,21 +268,24 @@ export default function PerformanceDashboard({ mode }) {
                     )}
                   </Panel>
                   <Panel title="By department (title)">
-                    <BarList items={byTitle} valueKey="retail" totals={totals} mode={mode} />
+                    <BarList items={byTitle} valueKey="retail" totals={totals} mode={mode}
+                      onSelect={(i) => openDrill(i.name, filtered.filter((r) => r.sellerTitle === i.name), 'retail')} />
                   </Panel>
                 </>
               )}
 
               {mode === 'installer' && (
                 <Panel title="By store (wholesale)">
-                  <BarList items={byRooftop} valueKey="wholesale" totals={totals} mode={mode} />
+                  <BarList items={byRooftop} valueKey="wholesale" totals={totals} mode={mode}
+                    onSelect={(i) => openDrill(i.name, filtered.filter((r) => r.dealershipName === i.name), 'wholesale')} />
                 </Panel>
               )}
 
               {mode === 'admin' && (
                 <>
                   <Panel title="Performance by dealer group">
-                    <BarList items={byGroup} valueKey="retail" totals={totals} mode={mode} />
+                    <BarList items={byGroup} valueKey="retail" totals={totals} mode={mode}
+                      onSelect={(i) => openDrill(i.name, filtered.filter((r) => r.groupName === i.name), 'retail')} />
                   </Panel>
                   <Panel title="Top rooftops">
                     <table style={tbl}>
@@ -241,7 +294,8 @@ export default function PerformanceDashboard({ mode }) {
                       </thead>
                       <tbody>
                         {[...byRooftop].sort((a, b) => b.retail - a.retail).slice(0, 10).map((r) => (
-                          <tr key={r.key} style={{ transition: 'background .15s ease' }}
+                          <tr key={r.key} style={{ transition: 'background .15s ease', cursor: 'pointer' }} title="See this rooftop's orders"
+                              onClick={() => openDrill(r.name, filtered.filter((x) => x.dealershipName === r.name), 'retail')}
                               onMouseEnter={(e) => { e.currentTarget.style.background = X.bg }}
                               onMouseLeave={(e) => { e.currentTarget.style.background = '' }}>
                             <Td>{r.name}</Td><Td r>{r.orders}</Td><Td r>{r.units}</Td>
@@ -257,24 +311,36 @@ export default function PerformanceDashboard({ mode }) {
               <div style={{ fontSize: 11.5, color: X.slate, marginTop: 14 }}>
                 Cancelled orders are excluded. Wholesale, retail, and margin are frozen onto each order
                 at submission — later price changes never rewrite history. Avg completion counts days from
-                submitted to completed.
+                submitted to completed. Every KPI card, bar, table row, and chart point is clickable —
+                tap any number to see the exact orders behind it.
               </div>
             </>
           )}
         </>
+      )}
+
+      {drill && (
+        <DrillPanel drill={drill} mode={mode}
+          onClose={() => setDrill(null)}
+          onOpenOrder={onOpenOrder} />
       )}
     </div>
   )
 }
 
 // Horizontal bar list: sorted by the mode's money basis, XPEL Yellow fill.
-function BarList({ items, valueKey, mode }) {
+function BarList({ items, valueKey, mode, onSelect }) {
   const sorted = [...items].sort((a, b) => b[valueKey] - a[valueKey])
   const max = Math.max(...sorted.map((i) => i[valueKey]), 1)
   return (
     <div>
       {sorted.map((i) => (
-        <div key={i.key} style={{ marginBottom: 12 }}>
+        <div key={i.key}
+          onClick={onSelect ? () => onSelect(i) : undefined}
+          title={onSelect ? 'See the orders behind this bar' : undefined}
+          onMouseEnter={onSelect ? (e) => { e.currentTarget.style.background = X.bg } : undefined}
+          onMouseLeave={onSelect ? (e) => { e.currentTarget.style.background = '' } : undefined}
+          style={{ marginBottom: 12, cursor: onSelect ? 'pointer' : 'default', borderRadius: 10, padding: '4px 6px', margin: '0 -6px 8px', transition: 'background .15s ease' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}>
             <span style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.name}</span>
             <span style={{ whiteSpace: 'nowrap' }}>
@@ -292,13 +358,111 @@ function BarList({ items, valueKey, mode }) {
   )
 }
 
-const Kpi = ({ label, value, format, sub }) => {
+// =============================================================================
+// The drill-down: a modal listing the exact ORDERS behind whichever number was
+// clicked — one line per order, metric-relevant value on the right, CSV export,
+// and (when the dashboard provides it) a jump straight to the real order.
+// =============================================================================
+function DrillPanel({ drill, mode, onClose, onOpenOrder }) {
+  const list = useMemo(() => {
+    let l = ordersFromRows(drill.rows)
+    if (drill.only) l = l.filter(drill.only)
+    return l
+  }, [drill])
+
+  const metric = drill.metric
+  const metricLabel = { retail: 'Retail', wholesale: 'Wholesale', margin: 'Margin', discount: 'Discount', completionDays: 'Days', units: 'Pkgs' }[metric] ?? 'Value'
+  const fmtMetric = (o) => metric === 'completionDays'
+    ? (o.completionDays != null ? `${o.completionDays.toFixed(1)} d` : '—')
+    : metric === 'units'
+      ? o.units
+      : money(o[metric] ?? 0, 0)
+  const metricTotal = metric === 'completionDays' || metric === 'units'
+    ? null
+    : list.reduce((s2, o) => s2 + (o[metric] ?? 0), 0)
+
+  const exportDrill = () => {
+    const base = ['Order #', 'Date', 'Status', 'Customer', 'Vehicle', mode === 'dealership' ? 'Seller' : 'Store', 'Packages']
+    const moneyCols = mode === 'installer'
+      ? ['Wholesale', 'Completion days']
+      : ['Retail', 'Wholesale', 'Margin', 'Discount', 'Completion days']
+    downloadCsv(
+      `xpel-${String(drill.title || 'orders').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.csv`,
+      [...base, ...moneyCols],
+      list.map((o) => [
+        o.orderNumber, dateUS(o.date), o.status, o.customerName, o.vehicle,
+        mode === 'dealership' ? o.sellerName : o.dealershipName, o.units,
+        ...(mode === 'installer'
+          ? [o.wholesale.toFixed(2), o.completionDays != null ? o.completionDays.toFixed(1) : '']
+          : [o.retail.toFixed(2), o.wholesale.toFixed(2), o.margin.toFixed(2), o.discount.toFixed(2), o.completionDays != null ? o.completionDays.toFixed(1) : '']),
+      ]),
+    )
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(20,18,19,0.45)', zIndex: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="x-fade" onClick={(e) => e.stopPropagation()}
+        style={{ ...CARD, width: 'min(780px, 100%)', maxHeight: '82vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: X.black, color: X.white, padding: '14px 18px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{drill.title}</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,253,0.65)' }}>
+              {list.length} order{list.length === 1 ? '' : 's'}
+              {metricTotal != null && <> · {metricLabel} total {money(metricTotal, 0)}</>}
+            </div>
+          </div>
+          <button onClick={exportDrill} style={drillCsvBtn}>CSV</button>
+          <button onClick={onClose} title="Close" style={drillX}>×</button>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '6px 16px 14px' }}>
+          {list.length === 0 && (
+            <div style={{ color: X.slate, fontSize: 13.5, padding: '18px 4px' }}>No orders behind this number in the current range.</div>
+          )}
+          {list.map((o) => (
+            <div key={o.orderId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: `1px solid ${X.line}`, fontSize: 13 }}>
+              <span style={{ width: 92, color: X.slate, fontSize: 12, flexShrink: 0 }}>{o.orderNumber}</span>
+              <span style={{ width: 76, color: X.slate, fontSize: 12, flexShrink: 0 }}>{dateUS(o.date)}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.customerName || '—'}</span>
+                <span style={{ display: 'block', fontSize: 11.5, color: X.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {o.vehicle || 'Vehicle not entered'}{mode === 'dealership' ? (o.sellerName !== '—' ? ` · ${o.sellerName}` : '') : ` · ${o.dealershipName}`}
+                </span>
+              </span>
+              <StatusMini status={o.status} />
+              <span style={{ width: 88, textAlign: 'right', fontWeight: 700, flexShrink: 0 }}>{fmtMetric(o)}</span>
+              {onOpenOrder && (
+                <button onClick={() => { onClose(); onOpenOrder(o.orderId) }} style={viewBtn} title="Open this order">View →</button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatusMini({ status }) {
+  const t = STATUS_TONE[status] || STATUS_TONE.submitted
+  return (
+    <span style={{ fontFamily: FONT.body, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: t.fg, background: t.bg, borderRadius: 999, padding: '3px 9px', fontWeight: 700, flexShrink: 0, width: 78, textAlign: 'center' }}>
+      {(status || '').replace('_', ' ')}
+    </span>
+  )
+}
+
+const drillCsvBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 8, padding: '7px 14px', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: FONT.body, flexShrink: 0 }
+const drillX = { background: 'transparent', color: 'rgba(255,255,253,0.7)', border: 'none', fontSize: 22, lineHeight: 1, cursor: 'pointer', padding: '0 2px', flexShrink: 0 }
+const viewBtn = { background: '#FFFFFD', color: X.black, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '6px 10px', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: FONT.body, flexShrink: 0, whiteSpace: 'nowrap' }
+
+const Kpi = ({ label, value, format, sub, onClick }) => {
   const shown = useCountUp(value)
   const display = typeof value === 'number'
     ? (format ? format(shown) : Math.round(shown).toLocaleString())
     : value
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
+    <div onClick={onClick} className={onClick ? 'x-lift' : undefined}
+      title={onClick ? 'See the orders behind this number' : undefined}
+      style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)', cursor: onClick ? 'pointer' : 'default' }}>
       <Sheen />
       <div style={{ color: X.white, fontSize: 24, fontWeight: 800 }}>{display}</div>
       <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label}</div>

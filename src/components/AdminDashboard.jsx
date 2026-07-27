@@ -23,6 +23,7 @@ const TABS = { overview: 'Overview', performance: 'Performance', orders: 'Orders
 export default function AdminDashboard() {
   const [tab, setTab] = usePersistentState('xpel.admin.tab', 'overview')
   const [orderFilter, setOrderFilter] = usePersistentState('xpel.admin.orderFilter', 'all')
+  const [focusOrder, setFocusOrder] = useState(null)
 
   const go = (nextTab, filter) => {
     if (filter) setOrderFilter(filter)
@@ -33,8 +34,11 @@ export default function AdminDashboard() {
     <div style={{ maxWidth: 1000, fontFamily: FONT.body }}>
       <TabNav tabs={TABS} value={tab} onChange={(k) => { if (k === 'orders') setOrderFilter('all'); setTab(k) }} />
       {tab === 'overview' && <OverviewTab onNavigate={go} />}
-      {tab === 'performance' && <PerformanceDashboard mode="admin" />}
-      {tab === 'orders' && <OrdersTab filter={orderFilter} setFilter={setOrderFilter} />}
+      {tab === 'performance' && (
+        <PerformanceDashboard mode="admin"
+          onOpenOrder={(id) => { setOrderFilter('all'); setFocusOrder({ id }); setTab('orders') }} />
+      )}
+      {tab === 'orders' && <OrdersTab filter={orderFilter} setFilter={setOrderFilter} focus={focusOrder} />}
       {tab === 'users' && <UsersAdmin />}
       {tab === 'network' && <NetworkAdmin />}
       {tab === 'dealers' && <DealersAdmin />}
@@ -127,7 +131,7 @@ function OverviewTab({ onNavigate }) {
   )
 }
 
-function OrdersTab({ filter, setFilter }) {
+function OrdersTab({ filter, setFilter, focus }) {
   const [orders, setOrders] = useState([])
   const [err, setErr] = useState('')
   useEffect(() => { getOrders().then(setOrders).catch((e) => setErr(e.message)) }, [])
@@ -139,7 +143,7 @@ function OrdersTab({ filter, setFilter }) {
     <div>
       <TabNav tabs={STATUS_TABS} value={filter} onChange={setFilter} style={{ marginBottom: 12 }} />
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
-      <OrdersList orders={shown} title={title} />
+      <OrdersList orders={shown} title={title} focus={focus} />
     </div>
   )
 }

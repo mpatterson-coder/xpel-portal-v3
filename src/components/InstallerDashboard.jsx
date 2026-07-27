@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder, getDealerships } from '../lib/db'
 import { getAllPrograms, getAllProducts, setDealershipProgram } from '../lib/adminDb'
@@ -28,26 +28,35 @@ export default function InstallerDashboard() {
   const [view, setView] = usePersistentState('xpel.installer.view', 'queue')
   const { profile } = useAuth()
   const { unread, refresh: refreshUnread } = useUnread(profile?.id)
+  const [focusOrder, setFocusOrder] = useState(null)
   return (
     <div style={{ maxWidth: 1000 }}>
       <TabNav tabs={{ queue: 'Fulfillment Queue', stores: 'My Stores', packages: 'My Packages', programs: 'Programs', messages: 'Messages', performance: 'Performance' }} value={view} onChange={setView} badges={{ messages: unread.total }} />
-      {view === 'queue' && <QueueView />}
+      {view === 'queue' && <QueueView focus={focusOrder} />}
       {view === 'stores' && <StoresView />}
       {view === 'packages' && <InstallerCatalog />}
       {view === 'programs' && <ProgramsView />}
       {view === 'messages' && <MessagesHub mode="installer" unread={unread} onRead={refreshUnread} />}
-      {view === 'performance' && <PerformanceDashboard mode="installer" />}
+      {view === 'performance' && (
+        <PerformanceDashboard mode="installer"
+          onOpenOrder={(id) => { setFocusOrder({ id }); setView('queue') }} />
+      )}
     </div>
   )
 }
 
-function QueueView() {
+function QueueView({ focus }) {
   const [orders, setOrders] = useState([])
   const [filter, setFilter] = usePersistentState('xpel.installer.filter', 'active')
   const [err, setErr] = useState('')
 
   const load = () => getOrders().then(setOrders).catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
+
+  // A Performance drill-down jump lands here: show every status so the
+  // target order can't be hidden by the Active/Completed filter.
+  useEffect(() => { if (focus) setFilter('all') }, [focus])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 
   const shown = orders.filter((o) => {
     if (filter === 'all') return true
@@ -64,15 +73,33 @@ function QueueView() {
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
       <div style={{ ...CARD, padding: 8, overflow: 'hidden' }}>
         {shown.length === 0 && <div style={{ color: X.slate, padding: 16, fontSize: 14 }}>All clear — nothing in this view.</div>}
-        {shown.map((o) => <QueueRow key={o.id} order={o} onChanged={load} />)}
+        {shown.map((o) => <QueueRow key={o.id} order={o} onChanged={load} focus={focus} />)}
       </div>
     </div>
   )
 }
 
-function QueueRow({ order, onChanged }) {
+function QueueRow({ order, onChanged, focus }) {
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
+  const rowRef = useRef(null)
+
+  // Load detail whenever the row opens (click or drill-down jump)...
+  useEffect(() => {
+    if (open && !detail) {
+      getOrderDetail(order.id)
+        .then(setDetail)
+        .catch((e) => setDetail({ error: e.message }))
+    }
+  }, [open, detail, order.id])
+
+  // ...and a jump from Performance expands + scrolls to this job.
+  useEffect(() => {
+    if (focus?.id === order.id) {
+      setOpen(true)
+      setTimeout(() => rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
+    }
+  }, [focus, order.id])
   const [busy, setBusy] = useState(false)
   const [dapDraft, setDapDraft] = useState(order.dap_work_order || '')
   const missingDap = !order.dap_work_order
@@ -82,13 +109,7 @@ function QueueRow({ order, onChanged }) {
     try { await setOrderWorkOrder(order.id, dapDraft.trim() || null); await onChanged() } finally { setBusy(false) }
   }
 
-  async function toggle() {
-    const next = !open
-    setOpen(next)
-    if (next && !detail) {
-      try { setDetail(await getOrderDetail(order.id)) } catch (e) { setDetail({ error: e.message }) }
-    }
-  }
+  const toggle = () => setOpen((v) => !v)
 
   // The status control is a dropdown so the shop can move an order BOTH ways —
   // e.g. pull one back from In Progress to Approved if a bay frees up wrong,
@@ -106,7 +127,7 @@ function QueueRow({ order, onChanged }) {
     : null
 
   return (
-    <div style={{ borderBottom: `1px solid ${X.line}`, padding: '11px 12px' }}>
+    <div ref={rowRef} style={{ borderBottom: `1px solid ${X.line}`, padding: '11px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ fontFamily: FONT.body, fontSize: 12, color: X.slate, width: 92 }}>{order.order_number}</div>
         <div style={{ flex: 1, cursor: 'pointer' }} onClick={toggle}>

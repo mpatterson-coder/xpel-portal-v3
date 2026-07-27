@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getOrderDetail } from '../lib/db'
 import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import StatusTimeline from './StatusTimeline'
@@ -8,35 +8,46 @@ import StatusTimeline from './StatusTimeline'
 // discount visible), and the complete status history. Collapsed rows keep the
 // compact progress bar for at-a-glance scanning. RLS already guarantees the
 // user only receives orders they're allowed to see.
-export default function OrdersList({ orders, title = 'Orders' }) {
+export default function OrdersList({ orders, title = 'Orders', focus = null }) {
   return (
     <div style={{ ...CARD, padding: 24 }}>
       <h2 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: FONT.headingWeight }}>{title}</h2>
       {(!orders || orders.length === 0) && <div style={{ color: X.slate, fontSize: 14 }}>No orders yet.</div>}
-      {orders?.map((o) => <OrderRow key={o.id} order={o} />)}
+      {orders?.map((o) => <OrderRow key={o.id} order={o} focus={focus} />)}
     </div>
   )
 }
 
-function OrderRow({ order: o }) {
+function OrderRow({ order: o, focus }) {
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
+  const rowRef = useRef(null)
 
-  async function toggle() {
-    const next = !open
-    setOpen(next)
-    if (next && !detail) {
-      try { setDetail(await getOrderDetail(o.id)) }
-      catch (e) { setDetail({ error: e.message }) }
+  // Opening (by click or by a Performance drill-down jump) loads the detail.
+  useEffect(() => {
+    if (open && !detail) {
+      getOrderDetail(o.id)
+        .then(setDetail)
+        .catch((e) => setDetail({ error: e.message }))
     }
-  }
+  }, [open, detail, o.id])
+
+  // A drill-down "View order" jump lands here: expand and scroll into view.
+  useEffect(() => {
+    if (focus?.id === o.id) {
+      setOpen(true)
+      setTimeout(() => rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
+    }
+  }, [focus, o.id])
+
+  const toggle = () => setOpen((v) => !v)
 
   const items = detail && !detail.error ? detail.items : []
   const discountTotal = items.reduce(
     (s, it) => s + Math.max(0, Number(it.list_price ?? it.unit_price) - Number(it.unit_price)) * it.quantity, 0)
 
   return (
-    <div style={{ padding: '10px 0', borderTop: `1px solid ${X.line}` }}>
+    <div ref={rowRef} style={{ padding: '10px 0', borderTop: `1px solid ${X.line}` }}>
       <div onClick={toggle} title={open ? 'Hide details' : 'Show full status & details'}
         style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
         <div style={{ fontFamily: FONT.body, fontSize: 12, color: X.slate, width: 96 }}>{o.order_number}</div>

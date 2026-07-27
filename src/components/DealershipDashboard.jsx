@@ -22,6 +22,9 @@ export default function DealershipDashboard() {
   const [view, setView] = usePersistentState('xpel.dealer.view', 'order')
   const [orders, setOrders] = useState([])
   const [err, setErr] = useState('')
+  // Set by a Performance drill-down "View order" jump; OrdersList expands
+  // and scrolls to this order when we land back on the New Order tab.
+  const [focusOrder, setFocusOrder] = useState(null)
 
   const load = () => getOrders().then(setOrders).catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
@@ -44,14 +47,17 @@ export default function DealershipDashboard() {
           <OrderForm onCreated={load} />
           <div>
             {err && <div style={{ color: COLOR.red, marginBottom: 8 }}>{err}</div>}
-            <OrdersList orders={orders} title="This Store's Orders" />
+            <OrdersList orders={orders} title="This Store's Orders" focus={focusOrder} />
           </div>
         </div>
       )}
       {active === 'pricing' && <StorePricingAdmin />}
       {active === 'team' && <TeamAdmin />}
       {active === 'messages' && <MessagesHub mode="dealership" unread={unread} onRead={refreshUnread} />}
-      {active === 'performance' && <PerformanceDashboard mode="dealership" />}
+      {active === 'performance' && (
+        <PerformanceDashboard mode="dealership"
+          onOpenOrder={(id) => { setFocusOrder({ id }); setView('order') }} />
+      )}
     </div>
   )
 }

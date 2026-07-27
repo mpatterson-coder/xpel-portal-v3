@@ -130,11 +130,11 @@ function ProgramCard({ program, products, links, storeCount, ownerName, canEdit,
           {byCategory.map(([cat, items]) => (
             <div key={cat} style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, color: X.slate, margin: '6px 0 4px' }}>{cat}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 4 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 2 }}>
                 {items.map((p) => (
-                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, padding: '5px 6px', borderRadius: 8, cursor: busy ? 'wait' : 'pointer', background: linkedIds.has(p.id) ? '#FFF7E0' : 'transparent' }}>
+                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, padding: '7px 8px', borderRadius: 8, cursor: busy ? 'wait' : 'pointer', background: linkedIds.has(p.id) ? '#FFF7E0' : 'transparent' }}>
                     <input type="checkbox" checked={linkedIds.has(p.id)} disabled={busy || !canEdit} onChange={() => toggle(p)} />
-                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    <span style={{ flex: 1, minWidth: 0, lineHeight: 1.35 }}>{p.name}</span>
                     {linkedIds.has(p.id) && (
                       <WholesaleInput program={program} product={p} disabled={!canEdit}
                         value={wholesaleByProduct.get(p.id) ?? null} onChanged={onChanged} onError={onError} />

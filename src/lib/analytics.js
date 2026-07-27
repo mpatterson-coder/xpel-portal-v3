@@ -29,7 +29,8 @@ export async function fetchPerformanceRows() {
       .from('order_items')
       .select(`quantity, unit_price, list_price, unit_cost,
         product:products(id, name, category, tier, cost),
-        order:orders(id, created_at, completed_at, created_by, status, dealership_id, group_id,
+        order:orders(id, order_number, customer_name, vehicle_year, vehicle_make, vehicle_model,
+          created_at, completed_at, created_by, status, dealership_id, group_id,
           creator:profiles!orders_created_by_fkey(full_name, title),
           dealership:dealerships(name), group:dealership_groups(name))`)
       .order('id')
@@ -44,6 +45,9 @@ export async function fetchPerformanceRows() {
     .filter((r) => r.order && r.product)
     .map((r) => ({
       date: r.order.created_at,
+      orderNumber: r.order.order_number,
+      customerName: r.order.customer_name,
+      vehicle: [r.order.vehicle_year, r.order.vehicle_make, r.order.vehicle_model].filter(Boolean).join(' '),
       status: r.order.status,
       orderId: r.order.id,
       groupId: r.order.group_id,
@@ -112,18 +116,33 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 // Revenue over time. Buckets by DAY when the data spans ≤ 62 days, otherwise
 // by MONTH — with empty buckets filled in so the line doesn't lie.
-export function timeSeries(rows) {
-  if (!rows.length) return []
+// The chart's bucket labeler for a given row set — exported so a click on a
+// chart point can be mapped back to the exact rows inside that bucket.
+function rangeOf(rows) {
   let min = Infinity, max = -Infinity
   for (const r of rows) {
     const t = new Date(r.date).getTime()
     if (t < min) min = t
     if (t > max) max = t
   }
-  const daily = (max - min) / 86400000 <= 62
-  const key = (d) => daily
-    ? `${d.getMonth() + 1}/${d.getDate()}`
-    : `${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`
+  return { min, max, daily: (max - min) / 86400000 <= 62 }
+}
+
+export function makeBucketKey(rows) {
+  if (!rows.length) return () => ''
+  const { daily } = rangeOf(rows)
+  return (date) => {
+    const d = date instanceof Date ? date : new Date(date)
+    return daily
+      ? `${d.getMonth() + 1}/${d.getDate()}`
+      : `${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`
+  }
+}
+
+export function timeSeries(rows) {
+  if (!rows.length) return []
+  const { min, max, daily } = rangeOf(rows)
+  const key = makeBucketKey(rows)
 
   const buckets = []
   const map = new Map()
@@ -182,4 +201,45 @@ export function filterOptions(rows) {
     products: Array.from(prods.values()).sort((a, b) => a.name.localeCompare(b.name)),
     groups: Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name)),
   }
+}
+
+
+// Collapse line-item rows into one entry per ORDER — the basis for every
+// drill-down list ("show me the orders behind this number") and CSV export.
+export function ordersFromRows(rows) {
+  const map = new Map()
+  for (const r of rows) {
+    let o = map.get(r.orderId)
+    if (!o) {
+      o = {
+        orderId: r.orderId,
+        orderNumber: r.orderNumber ?? '—',
+        customerName: r.customerName ?? '',
+        vehicle: r.vehicle ?? '',
+        date: r.date,
+        status: r.status,
+        dealershipName: r.dealershipName,
+        groupName: r.groupName,
+        sellerName: r.sellerName,
+        sellerTitle: r.sellerTitle,
+        completedAt: r.completedAt,
+        retail: 0, wholesale: 0, listRetail: 0, units: 0,
+      }
+      map.set(r.orderId, o)
+    }
+    o.retail += r.retail
+    o.wholesale += r.wholesale
+    o.listRetail += r.listRetail ?? r.retail
+    o.units += r.qty
+  }
+  return [...map.values()]
+    .map((o) => ({
+      ...o,
+      margin: o.retail - o.wholesale,
+      discount: Math.max(0, o.listRetail - o.retail),
+      completionDays: o.completedAt
+        ? Math.max(0, (new Date(o.completedAt) - new Date(o.date)) / 86400000)
+        : null,
+    }))
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
 }
