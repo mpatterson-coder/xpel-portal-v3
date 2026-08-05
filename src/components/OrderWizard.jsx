@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getCatalog, getCatalogFor, getGroups, getDealerships, createOrder } from '../lib/db'
+import { getCatalog, getCatalogFor, getGroups, getDealerships, createOrder, addOrderPhotos } from '../lib/db'
 import { decodeVinFull, isLikelyVin } from '../lib/vin'
 import { usePersistentState } from '../lib/uiState'
 import Wizard from './Wizard'
 import { useConfirm } from './ConfirmDialog'
+import { AlertPill } from './ui'
 import { COLOR as X, FONT, money } from '../lib/theme'
 
 // =============================================================================
@@ -40,6 +41,12 @@ export default function OrderWizard({ open, onClose, onCreated, adminMode = fals
   const [cust, setCust] = usePersistentState(`xpel.${uid}.order.cust`, EMPTY_CUST)
   const [lines, setLines] = usePersistentState(`xpel.${uid}.order.lines`, [])
   const [store, setStore] = usePersistentState(`xpel.${uid}.wiz.store`, null) // {group_id, dealership_id}
+  const [notes, setNotes] = usePersistentState(`xpel.${uid}.order.notes`, '')
+  // Photos ride along at submit time. Unlike the rest of the draft, File
+  // objects can't persist across a page refresh — the step says so plainly.
+  const [photos, setPhotos] = useState([])            // [{ file, url }]
+  const [photoWarn, setPhotoWarn] = useState('')
+  const [uploadNote, setUploadNote] = useState('')
 
   const [decoding, setDecoding] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -164,11 +171,23 @@ export default function OrderWizard({ open, onClose, onCreated, adminMode = fals
         vehicle_model: veh.model.trim() || null,
         vehicle_trim: veh.trim.trim() || null,
         vehicle_size: veh.size,
+        notes: notes.trim() || null,
         onBehalf: adminMode ? store : null,
       })
+      setPhotoWarn('')
+      if (photos.length) {
+        try {
+          await addOrderPhotos(order.id, profile.id, photos.map((p) => p.file),
+            (i, n) => setUploadNote(`Uploading photo ${i} of ${n}…`))
+        } catch (pe) {
+          setPhotoWarn(`The order itself was placed successfully, but the photo upload failed (${pe.message}). Photos can be added to the order any time afterward.`)
+        }
+        setUploadNote('')
+      }
       setPlaced(order)
       // Clear the draft so nothing lingers.
-      setVin(''); setVeh(EMPTY_VEH); setDecodeNote(''); setCust(EMPTY_CUST); setLines([]); setStep(0)
+      photos.forEach((p) => URL.revokeObjectURL(p.url))
+      setVin(''); setVeh(EMPTY_VEH); setDecodeNote(''); setCust(EMPTY_CUST); setLines([]); setNotes(''); setPhotos([]); setStep(0)
       if (adminMode) setStore(null)
       onCreated?.(order)
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
@@ -181,7 +200,8 @@ export default function OrderWizard({ open, onClose, onCreated, adminMode = fals
       confirmLabel: 'Discard draft', tone: 'danger',
     })
     if (!ok) return
-    setVin(''); setVeh(EMPTY_VEH); setDecodeNote(''); setCust(EMPTY_CUST); setLines([]); setStep(0)
+    setVin(''); setVeh(EMPTY_VEH); setDecodeNote(''); setCust(EMPTY_CUST); setLines([]); setNotes('')
+    photos.forEach((p) => URL.revokeObjectURL(p.url)); setPhotos([]); setStep(0)
     if (adminMode) setStore(null)
   }
 
@@ -197,6 +217,7 @@ export default function OrderWizard({ open, onClose, onCreated, adminMode = fals
           <div style={{ fontSize: 13.5, color: X.slate, textAlign: 'center', marginTop: 6, lineHeight: 1.5 }}>
             Your installer has been notified. You can track every status change from the orders list — and you'll get an alert here when it moves.
           </div>
+          {photoWarn && <AlertPill tone="alert" style={{ marginTop: 12 }}>{photoWarn}</AlertPill>}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 18 }}>
             <button onClick={() => { const id = placed.id; setPlaced(null); onClose(id) }} style={trackBtn}>Track this order</button>
             <button onClick={() => setPlaced(null)} style={anotherBtn}>Start another</button>
@@ -351,6 +372,46 @@ export default function OrderWizard({ open, onClose, onCreated, adminMode = fals
     ),
   }
 
+  const photosStep = {
+    key: 'photos', label: 'Photos & Notes',
+    valid: true,
+    render: () => (
+      <div>
+        <StepIntro title="Anything the installer should see?" sub="Both parts are optional — photos of the vehicle or specific areas, and any notes about this job." />
+        <Field label="Photos (up to 6)">
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {photos.map((ph, i) => (
+              <span key={ph.url} style={{ position: 'relative' }}>
+                <img src={ph.url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 10, border: `1px solid ${X.gray}`, display: 'block' }} />
+                <button onClick={() => setPhotos((ps) => { URL.revokeObjectURL(ph.url); return ps.filter((_, j) => j !== i) })}
+                  style={photoX} title="Remove photo">×</button>
+              </span>
+            ))}
+            {photos.length < 6 && (
+              <label style={photoAdd}>
+                + Add
+                <input type="file" accept="image/*" multiple style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const fs = Array.from(e.target.files ?? []).map((f) => ({ file: f, url: URL.createObjectURL(f) }))
+                    setPhotos((ps) => [...ps, ...fs].slice(0, 6))
+                    e.target.value = ''
+                  }} />
+              </label>
+            )}
+          </div>
+          <div style={{ fontSize: 11.5, color: X.slate, marginTop: 6 }}>
+            Photos are sent when you submit. (Unlike the rest of your draft, they don’t survive a page refresh.)
+          </div>
+        </Field>
+        <Field label="Notes for the installer">
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} maxLength={2000}
+            placeholder="e.g. Customer is sensitive about the hood edge — please double-check alignment."
+            style={{ ...input, resize: 'vertical', lineHeight: 1.5 }} />
+        </Field>
+      </div>
+    ),
+  }
+
   const reviewStep = {
     key: 'review', label: 'Review & Confirm',
     valid: true,
@@ -399,19 +460,25 @@ export default function OrderWizard({ open, onClose, onCreated, adminMode = fals
             </div>
           )}
         </ReviewBlock>
+        {(photos.length > 0 || notes.trim()) && (
+          <ReviewBlock label="For the installer">
+            {photos.length > 0 && <div style={{ fontSize: 13 }}>{photos.length} photo{photos.length === 1 ? '' : 's'} attached</div>}
+            {notes.trim() && <div style={{ fontSize: 13, color: X.slate, marginTop: 2, whiteSpace: 'pre-wrap' }}>{notes.trim()}</div>}
+          </ReviewBlock>
+        )}
         {err && <div style={{ color: X.red, fontSize: 13, marginTop: 8 }}>{err}</div>}
       </div>
     ),
   }
 
   const steps = adminMode
-    ? [storeStep, vehicleStep, customerStep, packagesStep, reviewStep]
-    : [vehicleStep, customerStep, packagesStep, reviewStep]
+    ? [storeStep, vehicleStep, customerStep, packagesStep, photosStep, reviewStep]
+    : [vehicleStep, customerStep, packagesStep, photosStep, reviewStep]
   const boundedStep = Math.min(step, steps.length - 1)
 
   return (
     <Wizard
-      title={adminMode ? 'New Order — on a store\u2019s behalf' : 'New Order'}
+      title={adminMode ? 'New Order — on a store’s behalf' : 'New Order'}
       subtitle="Your draft saves automatically at every step."
       steps={steps} step={boundedStep} onStep={setStep}
       onClose={() => onClose()}
@@ -420,7 +487,7 @@ export default function OrderWizard({ open, onClose, onCreated, adminMode = fals
           <button onClick={discardDraft} style={discardBtn}>Discard draft</button>
           <button onClick={submit} disabled={busy || lines.length === 0}
             style={{ ...submitBtn, opacity: busy || lines.length === 0 ? 0.5 : 1 }}>
-            {busy ? 'Submitting…' : `Submit order · ${money(totals.revenue)}`}
+            {busy ? (uploadNote || 'Submitting…') : `Submit order · ${money(totals.revenue)}`}
           </button>
         </div>
       }
@@ -458,6 +525,8 @@ const miniBtn = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.
 const miniBtnOn = { background: X.black, color: X.white, borderColor: X.black }
 const miniInput = { width: 64, border: `1px solid ${X.gray}`, borderRadius: 7, padding: '4px 8px', fontSize: 12.5, fontFamily: FONT.body, outline: 'none' }
 const xBtnSm = { background: 'transparent', border: 'none', color: X.slate, fontSize: 16, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }
+const photoX = { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 999, border: 'none', background: X.black, color: X.white, fontSize: 12, cursor: 'pointer', lineHeight: 1 }
+const photoAdd = { width: 72, height: 72, borderRadius: 10, border: `1.5px dashed ${X.gray}`, background: '#FBFAF7', color: X.slate, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: FONT.body, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }
 const discardBtn = { background: 'transparent', color: X.red, border: `1px solid ${X.red}`, borderRadius: 10, padding: '11px 16px', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }
 const submitBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '11px 22px', fontWeight: 800, fontSize: 12.5, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', fontFamily: FONT.body }
 const trackBtn = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '11px 20px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', fontFamily: FONT.body }

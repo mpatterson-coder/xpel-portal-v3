@@ -32,7 +32,7 @@ export async function fetchPerformanceRows() {
         order:orders(id, order_number, customer_name, vehicle_year, vehicle_make, vehicle_model, vehicle_size,
           created_at, completed_at, created_by, status, dealership_id, group_id,
           creator:profiles!orders_created_by_fkey(full_name, title),
-          dealership:dealerships(name), group:dealership_groups(name))`)
+          dealership:dealerships(name, authorized_dealer_id), group:dealership_groups(name))`)
       .order('id')
       .range(from, from + PAGE - 1)
     if (error) throw error
@@ -55,6 +55,7 @@ export async function fetchPerformanceRows() {
       groupName: r.order.group?.name ?? '—',
       dealershipId: r.order.dealership_id,
       dealershipName: r.order.dealership?.name ?? '—',
+      installerId: r.order.dealership?.authorized_dealer_id ?? null,
       productId: r.product.id,
       productName: r.product.name,
       category: r.product.category || 'Other',
@@ -86,6 +87,7 @@ export function applyFilters(rows, f = {}) {
     if (f.groupId && r.groupId !== f.groupId) return false
     if (f.seller && r.sellerName !== f.seller) return false
     if (f.store && r.dealershipName !== f.store) return false
+    if (f.installer && r.installerId !== f.installer) return false
     if (f.size && (r.vehicleSize ?? '') !== f.size) return false
     if (f.discounted && !((r.listRetail ?? r.retail) > r.retail)) return false
     return true
@@ -199,7 +201,7 @@ export function breakdown(rows, keyField) {
 // Options for the filter dropdowns, derived from the data the user can see.
 export function filterOptions(rows) {
   const cats = new Map(), prods = new Map(), groups = new Map()
-  const sellers = new Set(), stores = new Set(), sizes = new Set(), statuses = new Set()
+  const sellers = new Set(), stores = new Set(), sizes = new Set(), statuses = new Set(), installers = new Set()
   for (const r of rows) {
     cats.set(r.category, true)
     prods.set(r.productId, { id: r.productId, name: r.productName, category: r.category })
@@ -208,6 +210,7 @@ export function filterOptions(rows) {
     if (r.dealershipName && r.dealershipName !== '—') stores.add(r.dealershipName)
     if (r.vehicleSize) sizes.add(r.vehicleSize)
     if (r.status) statuses.add(r.status)
+    if (r.installerId) installers.add(r.installerId)
   }
   return {
     categories: Array.from(cats.keys()).sort(),
@@ -217,6 +220,7 @@ export function filterOptions(rows) {
     stores: [...stores].sort(),
     sizes: [...sizes].sort(),
     statuses: [...statuses].sort(),
+    installers: [...installers],
   }
 }
 

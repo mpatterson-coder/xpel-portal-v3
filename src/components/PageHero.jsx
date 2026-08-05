@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getDealerships, getAuthorizedDealers } from '../lib/db'
 import { COLOR as X, FONT } from '../lib/theme'
-import { Sheen } from './ui'
+import { Sheen, CheckerBand } from './ui'
 
 // =============================================================================
 // The role hero — the xpel.com opening pattern (CAPS eyebrow, short confident
@@ -72,6 +72,10 @@ export default function PageHero() {
         </h1>
         <div style={{ color: 'rgba(255,255,253,0.62)', fontSize: 13.5 }}>
           {greeting()}{first ? `, ${first}` : ''}{place ? ` · ${place}` : ''} · {date}
+        </div>
+        {/* The checkered-flag strip from the brand deck's dark section slides */}
+        <div aria-hidden="true" style={{ position: 'absolute', left: -14, bottom: 10, opacity: 0.18, pointerEvents: 'none' }}>
+          <CheckerBand size={7} />
         </div>
       </div>
     </div>

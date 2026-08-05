@@ -13,7 +13,7 @@ import PerformanceDashboard from './PerformanceDashboard'
 import { usePersistentState } from '../lib/uiState'
 import { COLOR as X, FONT, CARD, money as fm, dateUS } from '../lib/theme'
 import TabNav from './TabNav'
-import { Eyebrow, Sheen, useCountUp } from './ui'
+import { Eyebrow, Sheen, useCountUp, Modal } from './ui'
 
 const money = (n) => fm(n, 0)
 const STATUS_TABS = { all: 'All', submitted: 'Submitted', in_review: 'In Review', approved: 'Approved', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled' }
@@ -113,6 +113,7 @@ function CommandCenter({ onNavigate }) {
         storeRows: stores.map((s) => ({
           ...s,
           programName: programById.get(s.program_id)?.name ?? null,
+          pkgCount: (linksByProgram.get(s.program_id)?.size ?? 0),
           lastOrder: lastOrderByStore.get(s.id) ?? null,
         })),
       }
@@ -142,7 +143,7 @@ function CommandCenter({ onNavigate }) {
         <Panel title="Network at a glance — who services whom (click a row to step in)">
           <table style={tbl}>
             <thead>
-              <tr><Th>Installer</Th><Th>Stores served</Th><Th>Program</Th><Th r>Packages</Th><Th r>Last order</Th></tr>
+              <tr><Th>Installer</Th><Th>Stores served</Th><Th>Package menus</Th><Th r>Packages</Th><Th r>Last order</Th></tr>
             </thead>
             <tbody>
               {view.rows.map((r) => (
@@ -163,7 +164,7 @@ function CommandCenter({ onNavigate }) {
           {feedItems.length === 0 && <div style={{ color: X.slate, fontSize: 13 }}>Activity appears here as orders move.</div>}
           {feedItems.map((f) => (
             <div key={f.id} style={{ padding: '7px 0', borderBottom: `1px solid ${X.line}`, fontSize: 12.5 }}>
-              <div style={{ fontWeight: 600, lineHeight: 1.35 }}>{f.text}</div>
+              <div style={{ fontWeight: 600, lineHeight: 1.35, overflowWrap: 'anywhere' }}>{f.text}</div>
               <div style={{ color: X.slate, fontSize: 11, marginTop: 2 }}>{dateUS(f.when)} · {new Date(f.when).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>
             </div>
           ))}
@@ -171,7 +172,7 @@ function CommandCenter({ onNavigate }) {
       </div>
 
       {pricingStore && (
-        <Modal title={`Store pricing — ${pricingStore.name}`} onClose={() => { setPricingStore(null); load() }}>
+        <Modal width={960} title={`Store pricing — ${pricingStore.name}`} onClose={() => { setPricingStore(null); load() }}>
           <StorePricingAdmin dealershipId={pricingStore.id} adminMode />
         </Modal>
       )}
@@ -197,7 +198,9 @@ function RelationshipRow({ row: r, open, onToggle, onPricing, onOrder }) {
           )}
         </Td>
         <Td>
-          {r.programNames.length ? r.programNames.join(', ') : <span style={{ color: X.slate }}>—</span>}
+          {r.stores.length === 0 ? <span style={{ color: X.slate }}>—</span> : (
+            <span style={{ fontWeight: 600 }}>{r.storeRows.filter((s) => s.pkgCount > 0).length} of {r.stores.length} menus built</span>
+          )}
           {r.unassigned > 0 && <span style={{ color: X.red, fontSize: 11.5, fontWeight: 700 }}> · {r.unassigned} unassigned</span>}
         </Td>
         <Td r>{r.packageCount}</Td>
@@ -207,11 +210,13 @@ function RelationshipRow({ row: r, open, onToggle, onPricing, onOrder }) {
         <tr key={s.id} style={{ background: '#FBFAF6' }}>
           <Td style={{ paddingLeft: 26, fontSize: 13 }}>{s.name}</Td>
           <Td style={{ fontSize: 12.5, color: X.slate }}>{[s.city, s.state].filter(Boolean).join(', ') || '—'}</Td>
-          <Td style={{ fontSize: 12.5 }}>{s.programName ?? <span style={{ color: X.red, fontWeight: 700 }}>no program</span>}</Td>
+          <Td style={{ fontSize: 12.5 }}>{s.pkgCount > 0 ? `${s.pkgCount} package${s.pkgCount === 1 ? '' : 's'}` : <span style={{ color: X.red, fontWeight: 700 }}>empty menu</span>}</Td>
           <Td r style={{ fontSize: 12.5, color: X.slate }}>{s.lastOrder ? dateUS(s.lastOrder) : 'never'}</Td>
           <Td r>
-            <button onClick={(e) => { e.stopPropagation(); onPricing(s) }} style={rowBtn}>Store pricing</button>
-            <button onClick={(e) => { e.stopPropagation(); onOrder(s) }} style={{ ...rowBtn, background: X.yellow, color: X.black, borderColor: X.yellow, marginLeft: 6 }}>Place order</button>
+            <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button onClick={(e) => { e.stopPropagation(); onPricing(s) }} style={rowBtn}>Store pricing</button>
+              <button onClick={(e) => { e.stopPropagation(); onOrder(s) }} style={{ ...rowBtn, background: X.yellow, color: X.black, borderColor: X.yellow }}>Place order</button>
+            </span>
           </Td>
         </tr>
       ))}
@@ -242,20 +247,6 @@ function OrdersTab({ filter, setFilter, focus }) {
   )
 }
 
-function Modal({ title, onClose, children }) {
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(20,18,19,0.5)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 20px', overflowY: 'auto' }}>
-      <div className="x-fade" onClick={(e) => e.stopPropagation()} style={{ ...CARD, width: 'min(960px, 100%)', padding: 0, overflow: 'hidden', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ background: X.black, color: X.white, padding: '14px 20px', fontWeight: 800, fontSize: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {title}
-          <button onClick={onClose} style={{ background: 'transparent', color: 'rgba(255,255,253,0.7)', border: 'none', fontSize: 24, lineHeight: 1, cursor: 'pointer' }}>×</button>
-        </div>
-        <div style={{ padding: 20, overflowY: 'auto' }}>{children}</div>
-      </div>
-    </div>
-  )
-}
-
 const Chip = ({ children }) => (
   <span style={{ display: 'inline-block', background: X.stone, borderRadius: 999, padding: '2.5px 10px', fontSize: 11.5, fontWeight: 600, marginRight: 4, marginBottom: 2 }}>{children}</span>
 )
@@ -267,9 +258,9 @@ const Stat = ({ label, value, format, onClick }) => {
     : value
   return (
     <button onClick={onClick} className="x-lift"
-      style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, border: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
+      style={{ position: 'relative', minWidth: 0, overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, border: 'none', textAlign: 'left', cursor: 'pointer', fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)' }}>
       <Sheen />
-      <div style={{ color: X.white, fontSize: 23, fontWeight: 800, whiteSpace: 'nowrap' }}>{display}</div>
+      <div style={{ color: X.white, fontSize: 21, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{display}</div>
       <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label} →</div>
     </button>
   )

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { compressImage } from './img'
 
 // =============================================================================
 // Data-access layer for the XPEL Dealership Portal pilot.
@@ -160,7 +161,7 @@ export async function getMessages(dealership_id, order_id = null) {
   return data ?? []
 }
 
-export async function sendMessage(profile, { dealership_id, authorized_dealer_id, order_id = null, body }) {
+export async function sendMessage(profile, { dealership_id, authorized_dealer_id, order_id = null, body, attachments = [] }) {
   const { data, error } = await supabase
     .from('messages')
     .insert({
@@ -170,7 +171,8 @@ export async function sendMessage(profile, { dealership_id, authorized_dealer_id
       sender_id: profile.id,
       sender_role: profile.role,
       sender_name: profile.full_name,
-      body: body.trim(),
+      body: (body ?? '').trim(),
+      attachments,
     })
     .select()
     .single()
@@ -324,23 +326,6 @@ export async function updateOrderStatus(orderId, status) {
     .single()
   if (error) throw error
   return data
-}
-
-// ---- Notifications ----------------------------------------------------------
-
-export async function getNotifications() {
-  const { data, error } = await supabase
-    .from('notifications')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(50)
-  if (error) throw error
-  return data ?? []
-}
-
-export async function markNotificationRead(id) {
-  const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id)
-  if (error) throw error
 }
 
 // ---- Admin: simple network rollups -----------------------------------------
@@ -513,4 +498,159 @@ export async function getProgramLinks() {
   const { data, error } = await supabase.from('program_products').select('program_id, product_id')
   if (error) throw error
   return data ?? []
+}
+
+
+// =============================================================================
+// UPDATE 21 — photos, attachments, and the installer's network tools
+// =============================================================================
+
+// ---- Storage ('attachments' private bucket) ---------------------------------
+
+export async function uploadAttachment(path, fileOrBlob) {
+  const { error } = await supabase.storage.from('attachments')
+    .upload(path, fileOrBlob, { contentType: 'image/jpeg', upsert: false })
+  if (error) throw error
+  return path
+}
+
+// Batch-resolve private storage paths into short-lived viewable URLs.
+export async function signedPhotoUrls(paths) {
+  const unique = [...new Set((paths ?? []).filter(Boolean))]
+  if (!unique.length) return new Map()
+  const { data, error } = await supabase.storage.from('attachments').createSignedUrls(unique, 3600)
+  if (error) throw error
+  const out = new Map()
+  ;(data ?? []).forEach((d, i) => { if (d?.signedUrl) out.set(d.path ?? unique[i], d.signedUrl) })
+  return out
+}
+
+// ---- Order photos -----------------------------------------------------------
+
+export async function getOrderPhotos(orderId) {
+  const { data, error } = await supabase.from('order_photos')
+    .select('*').eq('order_id', orderId).order('created_at')
+  if (error) throw error
+  const rows = data ?? []
+  const urls = await signedPhotoUrls(rows.map((r) => r.path))
+  return rows.map((r) => ({ ...r, url: urls.get(r.path) ?? null }))
+}
+
+// Compress + upload each photo, then record it on the order. onProgress gets
+// (current, total) so the UI can narrate long uploads.
+export async function addOrderPhotos(orderId, profileId, files, onProgress) {
+  const added = []
+  let i = 0
+  for (const f of files) {
+    i += 1
+    onProgress?.(i, files.length)
+    const blob = await compressImage(f)
+    const path = `orders/${orderId}/${crypto.randomUUID()}.jpg`
+    await uploadAttachment(path, blob)
+    const { data, error } = await supabase.from('order_photos')
+      .insert({ order_id: orderId, path, uploaded_by: profileId }).select().single()
+    if (error) throw error
+    added.push(data)
+  }
+  return added
+}
+
+export async function deleteOrderPhoto(photo) {
+  const { data, error } = await supabase.from('order_photos')
+    .delete().eq('id', photo.id).select('id')
+  if (error) throw error
+  if (!data?.length) throw new Error('Only the person who added a photo (or an admin) can remove it.')
+  try { await supabase.storage.from('attachments').remove([photo.path]) } catch { /* row is gone; orphan file is harmless */ }
+}
+
+// ---- Chat photo attachments -------------------------------------------------
+
+export async function uploadMessagePhotos(dealershipId, files) {
+  const paths = []
+  for (const f of files) {
+    const blob = await compressImage(f)
+    const path = `messages/${dealershipId}/${crypto.randomUUID()}.jpg`
+    await uploadAttachment(path, blob)
+    paths.push(path)
+  }
+  return paths
+}
+
+// ---- Installer network (add stores, own each store's package menu) ----------
+
+export async function installerCreateGroup(name) {
+  const { data, error } = await supabase.from('dealership_groups')
+    .insert({ name: name.trim() }).select().single()
+  if (error) throw error
+  return data
+}
+
+// Give a store its own (empty) package menu if it somehow lacks one.
+export async function ensureStoreMenu(store, dealerId) {
+  if (store.program_id) return { id: store.program_id }
+  const { data: prog, error: pErr } = await supabase.from('programs')
+    .insert({ name: `${store.name} — Package Menu`, authorized_dealer_id: dealerId })
+    .select().single()
+  if (pErr) throw pErr
+  const { error: uErr } = await supabase.from('dealerships')
+    .update({ program_id: prog.id }).eq('id', store.id)
+  if (uErr) throw uErr
+  return prog
+}
+
+// Create the rooftop AND its empty package menu in one motion.
+export async function installerCreateStore(dealerId, { name, street, city, state, zip, group_id }) {
+  const { data: store, error: sErr } = await supabase.from('dealerships')
+    .insert({
+      name: name.trim(), street: street.trim(), city: city.trim(),
+      state: state.trim(), zip: zip.trim(), group_id,
+      authorized_dealer_id: dealerId,
+    })
+    .select().single()
+  if (sErr) throw sErr
+  const menu = await ensureStoreMenu(store, dealerId)
+  return { ...store, program_id: menu.id }
+}
+
+// One store's full menu: each package, MY wholesale, and the store's retail
+// (visible to the shop read-only — every store prices its own retail).
+export async function getStoreMenu(store) {
+  if (!store.program_id) return []
+  const [{ data: items, error: iErr }, { data: prices, error: prErr }] = await Promise.all([
+    supabase.from('program_products')
+      .select('id, product_id, wholesale, product:products(*)')
+      .eq('program_id', store.program_id),
+    supabase.from('dealership_pricing')
+      .select('product_id, unit_price')
+      .eq('dealership_id', store.id),
+  ])
+  if (iErr) throw iErr
+  if (prErr) throw prErr
+  const retail = new Map((prices ?? []).map((p) => [p.product_id, p.unit_price]))
+  return (items ?? [])
+    .filter((r) => r.product)
+    .map((r) => ({
+      link_id: r.id,
+      product: r.product,
+      wholesale: r.wholesale ?? r.product.cost,
+      retail: retail.has(r.product_id) ? retail.get(r.product_id) : null,
+    }))
+    .sort((a, b) => a.product.name.localeCompare(b.product.name))
+}
+
+export async function addMenuPackage(program_id, product_id, wholesale) {
+  const { error } = await supabase.from('program_products')
+    .insert({ program_id, product_id, wholesale })
+  if (error) throw error
+}
+
+export async function removeMenuPackage(link_id) {
+  const { error } = await supabase.from('program_products').delete().eq('id', link_id)
+  if (error) throw error
+}
+
+export async function setMenuWholesale(link_id, wholesale) {
+  const { error } = await supabase.from('program_products')
+    .update({ wholesale }).eq('id', link_id)
+  if (error) throw error
 }

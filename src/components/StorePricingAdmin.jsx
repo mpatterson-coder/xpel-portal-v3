@@ -65,7 +65,7 @@ export default function StorePricingAdmin({ dealershipId: dIdProp = null, adminM
             <div style={{ textAlign: 'right' }}>Wholesale</div>
             <div style={{ textAlign: 'right' }}>Your retail</div>
             <div style={{ textAlign: 'right' }}>Margin</div>
-            <div style={{ textAlign: 'center' }}>On order screen</div>
+            <div style={{ textAlign: 'center' }}>Active</div>
           </div>
           {list.map((p) => (
             <Row key={p.id} p={p} dealershipId={dealershipId} onChanged={load} onError={setErr} />
@@ -182,7 +182,7 @@ function Row({ p, dealershipId, onChanged, onError }) {
         <button onClick={toggleHidden} disabled={busy}
           title={p.hidden ? 'Show this package on your order screen' : 'Hide this package from your order screen'}
           style={{ background: p.hidden ? X.stone : '#EAF0EB', color: p.hidden ? X.slate : X.green, border: `1px solid ${p.hidden ? X.gray : X.green}`, borderRadius: 999, padding: '5px 12px', fontWeight: 800, fontSize: 10.5, cursor: 'pointer', fontFamily: FONT.body, letterSpacing: '0.04em' }}>
-          {p.hidden ? 'HIDDEN' : 'SHOWN'}
+          {p.hidden ? 'HIDDEN' : 'ACTIVE'}
         </button>
       </div>
     </div>

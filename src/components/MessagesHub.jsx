@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { onNavigate } from '../lib/bus'
 import { useAuth } from '../context/AuthContext'
-import { getDealerships, getAuthorizedDealers, getOrders, getMessages, sendMessage, markChannelRead, getUnreadState } from '../lib/db'
+import { getDealerships, getAuthorizedDealers, getOrders, getMessages, sendMessage, markChannelRead, getUnreadState, uploadMessagePhotos, signedPhotoUrls } from '../lib/db'
 import { COLOR as X, FONT, CARD } from '../lib/theme'
 import { Spinner } from './ui'
 
@@ -138,6 +138,9 @@ function ChatPanel({ channel, profile, onRead }) {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const boxRef = useRef(null)
+  const fileRef = useRef(null)
+  const [files, setFiles] = useState([])          // [{ f, url }] pending photo attachments
+  const [urlMap, setUrlMap] = useState(new Map()) // storage path -> signed URL
 
   async function load(mark) {
     try {
@@ -151,7 +154,7 @@ function ChatPanel({ channel, profile, onRead }) {
   }
 
   useEffect(() => {
-    setMsgs(null); setErr(''); setBody('')
+    setMsgs(null); setErr(''); setBody(''); setFiles([])
     load(true)
     const t = setInterval(() => load(true), 20000)
     return () => clearInterval(t)
@@ -162,18 +165,34 @@ function ChatPanel({ channel, profile, onRead }) {
     if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight
   }, [msgs?.length])
 
+  // Resolve photo attachments into signed URLs (batched once per new path).
+  useEffect(() => {
+    const paths = (msgs ?? []).flatMap((m) => m.attachments ?? [])
+    const missing = [...new Set(paths)].filter((p) => !urlMap.has(p))
+    if (!missing.length) return
+    signedPhotoUrls(missing)
+      .then((m2) => setUrlMap((prev) => new Map([...prev, ...m2])))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msgs])
+
   async function send() {
     const text = body.trim()
-    if (!text || busy) return
+    if ((!text && files.length === 0) || busy) return
     setBusy(true); setErr('')
     try {
+      let attachments = []
+      if (files.length) attachments = await uploadMessagePhotos(channel.dealership_id, files.map((x) => x.f))
       await sendMessage(profile, {
         dealership_id: channel.dealership_id,
         authorized_dealer_id: channel.authorized_dealer_id,
         order_id: channel.order_id,
         body: text,
+        attachments,
       })
       setBody('')
+      files.forEach((x) => URL.revokeObjectURL(x.url))
+      setFiles([])
       await load(true)
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
@@ -191,10 +210,28 @@ function ChatPanel({ channel, profile, onRead }) {
         {msgs !== null && msgs.length === 0 && (
           <div style={{ color: X.slate, fontSize: 13.5 }}>No messages yet — start the conversation.</div>
         )}
-        {msgs?.map((m) => <Bubble key={m.id} m={m} mine={m.sender_id === profile.id} />)}
+        {msgs?.map((m) => <Bubble key={m.id} m={m} mine={m.sender_id === profile.id} urlFor={(pth) => urlMap.get(pth)} />)}
       </div>
       {err && <div style={{ color: X.red, fontSize: 12.5, padding: '6px 16px' }}>{err}</div>}
+      {files.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, padding: '8px 12px 0', flexWrap: 'wrap' }}>
+          {files.map((x, i) => (
+            <span key={x.url} style={{ position: 'relative' }}>
+              <img src={x.url} alt="" style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 8, border: `1px solid ${X.gray}`, display: 'block' }} />
+              <button onClick={() => setFiles((fs) => { URL.revokeObjectURL(x.url); return fs.filter((_, j) => j !== i) })}
+                style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: 999, border: 'none', background: X.black, color: X.white, fontSize: 11, cursor: 'pointer', lineHeight: 1 }} title="Remove">×</button>
+            </span>
+          ))}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: `1px solid ${X.line}` }}>
+        <button onClick={() => fileRef.current?.click()} title="Attach photos" style={attachBtn}>📷</button>
+        <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+          onChange={(e) => {
+            const fs = Array.from(e.target.files ?? []).map((f) => ({ f, url: URL.createObjectURL(f) }))
+            setFiles((prev) => [...prev, ...fs].slice(0, 4))
+            e.target.value = ''
+          }} />
         <input
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -203,7 +240,7 @@ function ChatPanel({ channel, profile, onRead }) {
           maxLength={4000}
           style={composer}
         />
-        <button onClick={send} disabled={busy || !body.trim()} style={{ ...sendBtn, opacity: busy || !body.trim() ? 0.5 : 1 }}>
+        <button onClick={send} disabled={busy || (!body.trim() && files.length === 0)} style={{ ...sendBtn, opacity: busy || (!body.trim() && files.length === 0) ? 0.5 : 1 }}>
           Send
         </button>
       </div>
@@ -211,7 +248,7 @@ function ChatPanel({ channel, profile, onRead }) {
   )
 }
 
-function Bubble({ m, mine }) {
+function Bubble({ m, mine, urlFor }) {
   const roleLabel = m.sender_role === 'installer' ? 'Installer' : 'Store'
   return (
     <div style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
@@ -226,7 +263,18 @@ function Bubble({ m, mine }) {
           borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
           padding: '9px 13px', fontSize: 13.5, lineHeight: 1.45,
           whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-        }}>{m.body}</div>
+        }}>
+          {m.body}
+          {(m.attachments ?? []).length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: m.body ? 7 : 0 }}>
+              {m.attachments.map((pth) => (
+                <a key={pth} href={urlFor?.(pth) ?? '#'} target="_blank" rel="noreferrer" title="Open full size">
+                  <img src={urlFor?.(pth) ?? ''} alt="Photo" style={{ width: 132, height: 132, objectFit: 'cover', borderRadius: 10, display: 'block', border: '1px solid rgba(20,18,19,0.15)' }} />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -253,6 +301,10 @@ const dot = {
 const composer = {
   flex: 1, boxSizing: 'border-box', background: '#FFFFFD', border: `1px solid ${X.gray}`,
   borderRadius: 12, padding: '11px 13px', fontSize: 14, fontFamily: FONT.body,
+}
+const attachBtn = {
+  background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 12,
+  padding: '0 13px', fontSize: 16, cursor: 'pointer', fontFamily: FONT.body,
 }
 const sendBtn = {
   background: X.yellow, color: X.black, border: 'none', borderRadius: 12, padding: '11px 20px',

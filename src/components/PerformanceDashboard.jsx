@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { fetchPerformanceRows, applyFilters, computeTotals, timeSeries, breakdown, filterOptions, ordersFromRows, makeBucketKey } from '../lib/analytics'
 import { downloadCsv } from '../lib/csv'
+import { getAuthorizedDealers } from '../lib/db'
 import { usePersistentState } from '../lib/uiState'
 import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import { Eyebrow, Sheen, Spinner, useCountUp } from './ui'
@@ -33,7 +34,7 @@ const daysAgoStr = (n) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const EMPTY_FILTERS = { preset: 'all', from: '', to: '', category: '', productId: '', groupId: '', status: '', seller: '', store: '', size: '', discounted: false, compare: false }
+const EMPTY_FILTERS = { preset: 'all', from: '', to: '', category: '', productId: '', groupId: '', installer: '', status: '', seller: '', store: '', size: '', discounted: false, compare: false }
 
 export default function PerformanceDashboard({ mode, onOpenOrder }) {
   const [rows, setRows] = useState(null)   // null = loading
@@ -42,6 +43,15 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
   const f = { ...EMPTY_FILTERS, ...fRaw }
 
   useEffect(() => { fetchPerformanceRows().then(setRows).catch((e) => setErr(e.message)) }, [])
+
+  // Admin-only: installer names for the Installer filter (ids live on the rows).
+  const [dealerNames, setDealerNames] = useState(new Map())
+  useEffect(() => {
+    if (mode !== 'admin') return
+    getAuthorizedDealers()
+      .then((ds) => setDealerNames(new Map(ds.map((d) => [d.id, d.name]))))
+      .catch(() => {})
+  }, [mode])
 
   const opts = useMemo(() => filterOptions(rows ?? []), [rows])
 
@@ -53,11 +63,11 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
     return { from: daysAgoStr(Number(f.preset)), to: todayStr() }
   }, [f.preset, f.from, f.to])
 
-  const dims = { category: f.category, productId: f.productId, groupId: f.groupId, status: f.status, seller: f.seller, store: f.store, size: f.size, discounted: f.discounted }
+  const dims = { category: f.category, productId: f.productId, groupId: f.groupId, installer: f.installer, status: f.status, seller: f.seller, store: f.store, size: f.size, discounted: f.discounted }
   const filtered = useMemo(
     () => applyFilters(rows ?? [], { ...range, ...dims }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, range, f.category, f.productId, f.groupId, f.status, f.seller, f.store, f.size, f.discounted],
+    [rows, range, f.category, f.productId, f.groupId, f.installer, f.status, f.seller, f.store, f.size, f.discounted],
   )
   const totals = useMemo(() => computeTotals(filtered), [filtered])
 
@@ -76,7 +86,7 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
     const iso = (d) => d.toISOString().slice(0, 10)
     return computeTotals(applyFilters(rows ?? [], { from: iso(pFrom), to: iso(pTo), ...dims }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cmp, rows, range.from, range.to, f.category, f.productId, f.groupId, f.status, f.seller, f.store, f.size, f.discounted])
+  }, [cmp, rows, range.from, range.to, f.category, f.productId, f.groupId, f.installer, f.status, f.seller, f.store, f.size, f.discounted])
   // Delta-percent helper: null when compare is off or the previous window was empty.
   const dl = (cur, prev) => (!cmp || totalsPrev == null || !isFinite(prev) || prev === 0) ? null : Math.round(((cur - prev) / prev) * 100)
   const series = useMemo(() => timeSeries(filtered), [filtered])
@@ -117,7 +127,7 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
     ]))
   }
   const productsInCategory = f.category ? opts.products.filter((p) => p.category === f.category) : opts.products
-  const filtersActive = f.preset !== 'all' || f.category || f.productId || f.groupId || f.status || f.seller || f.store || f.size || f.discounted || f.compare
+  const filtersActive = f.preset !== 'all' || f.category || f.productId || f.groupId || f.installer || f.status || f.seller || f.store || f.size || f.discounted || f.compare
 
   const titles = {
     dealership: ['Store Performance', 'Margin on every order, tracked live.'],
@@ -155,6 +165,12 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
           <select value={f.groupId} onChange={(e) => setF({ ...f, groupId: e.target.value })} style={sel}>
             <option value="">All groups</option>
             {opts.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        )}
+        {mode === 'admin' && (
+          <select value={f.installer} onChange={(e) => setF({ ...f, installer: e.target.value })} style={sel} title="Only orders serviced by this installer">
+            <option value="">All installers</option>
+            {opts.installers.map((id) => <option key={id} value={id}>{dealerNames.get(id) ?? 'Installer'}</option>)}
           </select>
         )}
         <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} style={sel}>

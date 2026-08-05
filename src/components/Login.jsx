@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { listAccounts, forgetAccount } from '../lib/accounts'
 import { COLOR, FONT } from '../lib/theme'
 import logoWhite from '../assets/xpel-white.png'
+import heroJeep from '../assets/brand/hero-jeep.jpg'
 
 const ROLE_LABEL = { dealership: 'Dealership', installer: 'Installer', admin: 'XPEL Admin' }
 
@@ -51,6 +52,10 @@ export default function Login() {
 
   return (
     <div style={s.screen}>
+      {/* Brand action photography (Core deck) under a Carbon Black wash, so the
+          frosted card reads exactly like film over paint */}
+      <img src={heroJeep} alt="" aria-hidden="true" style={s.heroImg} />
+      <div aria-hidden="true" style={s.heroWash} />
       {/* The angled shape field (Graphic Elements, p.34–35) — blurred through the card */}
       <div aria-hidden="true" style={{ ...s.shape, top: '12%', left: '14%', width: 220, height: 220, background: 'rgba(253,181,33,0.10)' }} />
       <div aria-hidden="true" style={{ ...s.shape, top: '30%', left: '30%', width: 130, height: 130, background: 'rgba(231,228,218,0.07)' }} />
@@ -109,6 +114,14 @@ const s = {
     position: 'relative', overflow: 'hidden',
   },
   shape: { position: 'absolute', transform: 'skewX(-14deg)', borderRadius: 6 },
+  heroImg: {
+    position: 'absolute', inset: 0, width: '100%', height: '100%',
+    objectFit: 'cover', objectPosition: 'center 38%',
+  },
+  heroWash: {
+    position: 'absolute', inset: 0,
+    background: 'linear-gradient(115deg, rgba(20,18,19,0.93) 0%, rgba(20,18,19,0.78) 44%, rgba(20,18,19,0.55) 100%)',
+  },
   card: {
     position: 'relative', width: '100%', maxWidth: 410,
     background: 'rgba(255,255,253,0.055)',
