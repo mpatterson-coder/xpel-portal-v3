@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getAllProducts, createProduct, updateProduct, deleteProduct } from '../lib/adminDb'
+import { getAllProducts, createProduct, updateProduct } from '../lib/adminDb'
+import { getOrderedProductIds, deleteProductPermanently } from '../lib/db'
+import { useConfirm } from './ConfirmDialog'
+import TabNav from './TabNav'
 import { COLOR as X, FONT, CARD, money } from '../lib/theme'
 
 // =============================================================================
@@ -16,7 +19,12 @@ export default function InstallerCatalog() {
   const [adding, setAdding] = useState(false)
   const [openId, setOpenId] = useState(null)
 
-  const load = () => getAllProducts().then(setProducts).catch((e) => setErr(e.message))
+  const confirm = useConfirm()
+  const [ordered, setOrdered] = useState(new Set())
+  const [life, setLife] = useState('active')
+  const load = () => Promise.all([getAllProducts(), getOrderedProductIds()])
+    .then(([p, oids]) => { setProducts(p); setOrdered(oids) })
+    .catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
 
   const mine = useMemo(() => (products ?? []).filter((p) => p.authorized_dealer_id === dealerId), [products, dealerId])
@@ -41,38 +49,60 @@ export default function InstallerCatalog() {
           onSave={async (f) => { await createProduct(f); setAdding(false); load() }} onError={setErr} />
       )}
 
+      <TabNav tabs={{ active: 'Active', archived: 'Archived', all: 'All' }} value={life} onChange={setLife} style={{ marginBottom: 10 }} />
       <div style={{ ...CARD, padding: 18 }}>
         {products === null && <div style={{ color: X.slate, fontSize: 14 }}>Loading…</div>}
         {products !== null && mine.length === 0 && (
           <div style={{ color: X.slate, fontSize: 14 }}>No packages yet — create your first one above.</div>
         )}
-        {mine.map((p) => (
+        {products !== null && mine.length > 0 && mine.filter((p) => life === 'all' ? true : life === 'archived' ? !p.active : p.active).length === 0 && (
+          <div style={{ color: X.slate, padding: '10px 0', fontSize: 13.5 }}>
+            {life === 'archived' ? 'Nothing archived yet — archived packages land here, out of the way but never lost.' : 'No packages in this view.'}
+          </div>
+        )}
+        {mine.filter((p) => life === 'all' ? true : life === 'archived' ? !p.active : p.active).map((p) => (
           <div key={p.id} style={{ borderTop: `1px solid ${X.line}` }}>
             <div onClick={() => setOpenId(openId === p.id ? null : p.id)}
               style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '9px 4px', opacity: p.active ? 1 : 0.45, cursor: 'pointer' }}>
               <div style={{ flex: 2, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
                 <div style={{ fontSize: 11.5, color: X.slate }}>{p.category}{p.tier ? ` · ${p.tier}` : ''} · {p.sku}</div>
+                {p.description && <div style={{ fontSize: 12, color: X.slate, marginTop: 3, lineHeight: 1.45 }}>{p.description}</div>}
               </div>
               <div style={{ width: 110, textAlign: 'right' }}>
                 <div style={{ fontWeight: 700 }}>{money(Number(p.cost || 0))}</div>
                 <div style={{ fontSize: 10.5, color: X.slate }}>your wholesale</div>
               </div>
               <span style={{ ...pill, background: p.active ? X.green : X.gray, color: p.active ? '#fff' : X.slate }}>
-                {p.active ? 'Active' : 'Retired'}
+                {p.active ? 'Active' : 'Archived'}
               </span>
               <span style={{ color: X.slate, fontSize: 12 }}>{openId === p.id ? '▲' : '▼'}</span>
             </div>
             {openId === p.id && (
               <PackageEditor product={p} categories={categories} dealerId={dealerId}
                 onSave={async (f) => { await updateProduct(p.id, f); setOpenId(null); load() }}
-                onToggleActive={async () => { await updateProduct(p.id, { active: !p.active }); load() }}
-                onDelete={async () => {
-                  if (!window.confirm(`Delete "${p.name}"? This can't be undone.`)) return
-                  try { await deleteProduct(p.id); setOpenId(null); load() }
-                  catch {
-                    setErr(`"${p.name}" has been used on orders, so it can't be deleted — retire it instead (history stays intact).`)
-                  }
+                onToggleActive={async () => {
+                  const ok = await confirm({
+                    title: p.active ? `Archive "${p.name}"?` : `Restore "${p.name}"?`,
+                    message: p.active
+                      ? 'Archiving hides it from every store\u2019s order screen and from program linking. History and reports are untouched — restore it any time.'
+                      : 'Restoring makes it available for programs and ordering again.',
+                    summary: [['Package', p.name], ['Now', p.active ? 'Active' : 'Archived'], ['After', p.active ? 'Archived' : 'Active']],
+                    confirmLabel: p.active ? 'Archive package' : 'Restore package',
+                  })
+                  if (!ok) return
+                  await updateProduct(p.id, { active: !p.active }); load()
+                }}
+                onDelete={ordered.has(p.id) ? null : async () => {
+                  const ok = await confirm({
+                    title: `Permanently delete "${p.name}"?`,
+                    message: 'This package has never been ordered, so it can be removed completely — from your catalog, your programs, and every store. This cannot be undone.',
+                    summary: [['Package', p.name], ['SKU', p.sku]],
+                    confirmLabel: 'Delete forever', tone: 'danger', typeToConfirm: 'delete',
+                  })
+                  if (!ok) return
+                  try { await deleteProductPermanently(p.id); setOpenId(null); load() }
+                  catch (e) { setErr(e.message) }
                 }}
                 onError={setErr} />
             )}

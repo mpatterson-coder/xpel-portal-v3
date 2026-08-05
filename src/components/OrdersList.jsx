@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { getOrderDetail } from '../lib/db'
+import { useAuth } from '../context/AuthContext'
+import { useConfirm } from './ConfirmDialog'
+import { getOrderDetail , updateOrderStatus } from '../lib/db'
 import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import StatusTimeline from './StatusTimeline'
 
@@ -8,17 +10,43 @@ import StatusTimeline from './StatusTimeline'
 // discount visible), and the complete status history. Collapsed rows keep the
 // compact progress bar for at-a-glance scanning. RLS already guarantees the
 // user only receives orders they're allowed to see.
-export default function OrdersList({ orders, title = 'Orders', focus = null }) {
+export default function OrdersList({ orders, title = 'Orders', focus = null, onChanged = null }) {
   return (
     <div style={{ ...CARD, padding: 24 }}>
       <h2 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: FONT.headingWeight }}>{title}</h2>
       {(!orders || orders.length === 0) && <div style={{ color: X.slate, fontSize: 14 }}>No orders yet.</div>}
-      {orders?.map((o) => <OrderRow key={o.id} order={o} focus={focus} />)}
+      {orders?.map((o) => <OrderRow key={o.id} order={o} focus={focus} onChanged={onChanged} />)}
     </div>
   )
 }
 
-function OrderRow({ order: o, focus }) {
+function OrderRow({ order: o, focus, onChanged }) {
+  const { role } = useAuth()
+  const confirm = useConfirm()
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const cancellable = (role === 'dealership' && ['submitted', 'in_review'].includes(o.status))
+    || (role === 'admin' && !['completed', 'cancelled'].includes(o.status))
+
+  async function cancelOrder() {
+    const ok = await confirm({
+      title: `Cancel order ${o.order_number}?`,
+      message: role === 'admin'
+        ? 'You are cancelling this order on the store\u2019s behalf. The store and installer will see it as cancelled.'
+        : 'Your installer will see this order as cancelled. This can\u2019t be undone from here.',
+      summary: [
+        ['Order', o.order_number],
+        ['Customer', o.customer_name || '\u2014'],
+        ['Status now', (o.status || '').replace('_', ' ')],
+        ['After', 'cancelled'],
+      ],
+      confirmLabel: 'Cancel order', tone: 'danger',
+    })
+    if (!ok) return
+    setCancelBusy(true)
+    try { await updateOrderStatus(o.id, 'cancelled'); onChanged?.() }
+    catch (e) { alert(e.message) }
+    finally { setCancelBusy(false) }
+  }
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
   const rowRef = useRef(null)
@@ -112,6 +140,14 @@ function OrderRow({ order: o, focus }) {
                     </div>
                   ))}
                 </>
+              )}
+              {cancellable && (
+                <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px dashed ${X.line}`, textAlign: 'right' }}>
+                  <button onClick={cancelOrder} disabled={cancelBusy}
+                    style={{ background: 'transparent', color: X.red, border: `1px solid ${X.red}`, borderRadius: 9, padding: '8px 14px', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body, opacity: cancelBusy ? 0.5 : 1 }}>
+                    {cancelBusy ? 'Cancelling…' : 'Cancel this order'}
+                  </button>
+                </div>
               )}
             </>
           )}

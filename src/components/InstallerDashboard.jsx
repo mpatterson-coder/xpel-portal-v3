@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder, getDealerships } from '../lib/db'
+import { getOrders, getOrderDetail, updateOrderStatus, setOrderWorkOrder, getDealerships, getOrderReads, markOrderRead } from '../lib/db'
 import { getAllPrograms, getAllProducts, setDealershipProgram } from '../lib/adminDb'
 import { usePersistentState } from '../lib/uiState'
 import { useUnread } from '../lib/useUnread'
@@ -11,6 +11,9 @@ import { Spinner } from './ui'
 import { COLOR as X, FONT, CARD, STATUS_TONE, money, dateUS } from '../lib/theme'
 import StatusTimeline from './StatusTimeline'
 import TabNav from './TabNav'
+import GettingStarted from './GettingStarted'
+import { useConfirm } from './ConfirmDialog'
+import { onNavigate } from '../lib/bus'
 import PerformanceDashboard from './PerformanceDashboard'
 
 const STATUS_LABELS = {
@@ -29,6 +32,10 @@ export default function InstallerDashboard() {
   const { profile } = useAuth()
   const { unread, refresh: refreshUnread } = useUnread(profile?.id)
   const [focusOrder, setFocusOrder] = useState(null)
+  useEffect(() => onNavigate((d) => {
+    if (d.view === 'messages') setView('messages')
+    if (d.view === 'order') { if (d.orderId) setFocusOrder({ id: d.orderId }); setView('queue') }
+  }), [])
   return (
     <div style={{ maxWidth: 1000 }}>
       <TabNav tabs={{ queue: 'Fulfillment Queue', stores: 'My Stores', packages: 'My Packages', programs: 'Programs', messages: 'Messages', performance: 'Performance' }} value={view} onChange={setView} badges={{ messages: unread.total }} />
@@ -46,40 +53,88 @@ export default function InstallerDashboard() {
 }
 
 function QueueView({ focus }) {
+  const { profile } = useAuth()
   const [orders, setOrders] = useState([])
-  const [filter, setFilter] = usePersistentState('xpel.installer.filter', 'active')
+  const [newIds, setNewIds] = useState(new Set())
   const [err, setErr] = useState('')
 
   const load = () => getOrders().then(setOrders).catch((e) => setErr(e.message))
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    getOrderReads()
+      .then((reads) => getOrders().then((os) => setNewIds(new Set(os.filter((o) => !reads.has(o.id)).map((o) => o.id)))))
+      .catch(() => {})
+  }, [])
 
-  // A Performance drill-down jump lands here: show every status so the
-  // target order can't be hidden by the Active/Completed filter.
-  useEffect(() => { if (focus) setFilter('all') }, [focus])
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Opening a job marks it seen — the NEW pill and lane count update instantly.
+  const markSeen = (orderId) => {
+    if (!newIds.has(orderId)) return
+    setNewIds((prev) => { const n = new Set(prev); n.delete(orderId); return n })
+    if (profile?.id) markOrderRead(profile.id, orderId).catch(() => {})
+  }
 
-  const shown = orders.filter((o) => {
-    if (filter === 'all') return true
-    if (filter === 'completed') return o.status === 'completed' || o.status === 'cancelled'
-    return o.status !== 'completed' && o.status !== 'cancelled'
-  })
+  // Soonest pick-up first (no date sinks to the bottom), then oldest first.
+  const bySchedule = (a, b) => {
+    if (a.pickup_date && b.pickup_date && a.pickup_date !== b.pickup_date) return a.pickup_date < b.pickup_date ? -1 : 1
+    if (a.pickup_date && !b.pickup_date) return -1
+    if (!a.pickup_date && b.pickup_date) return 1
+    return new Date(a.created_at) - new Date(b.created_at)
+  }
+
+  const LANES = [
+    { key: 'incoming', label: 'Submitted', sub: 'New work awaiting review', statuses: ['submitted', 'in_review'] },
+    { key: 'active', label: 'In progress', sub: 'Approved and in the bay', statuses: ['approved', 'in_progress'] },
+    { key: 'done', label: 'Recently completed', sub: 'Completed & cancelled', statuses: ['completed', 'cancelled'] },
+  ]
 
   return (
     <div>
+      <GettingStarted storageKey={`xpel.gs.installer.${profile?.id}`} title="Getting started at your shop" items={[
+        { label: 'New orders arrive in the Submitted lane wearing a NEW badge — open one to review it', done: orders.length > 0 && ![...newIds].length },
+        { label: 'Move jobs with the status dropdown — every change asks you to confirm and notifies the store', done: false },
+        { label: 'Set wholesale and link packages under Programs', done: false },
+      ]} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: 21, fontWeight: FONT.headingWeight }}>Fulfillment Queue</h2>
-        <TabNav tabs={FILTERS} value={filter} onChange={setFilter} style={{ marginBottom: 0 }} />
+        {newIds.size > 0 && (
+          <span style={{ background: X.yellow, color: X.black, borderRadius: 999, padding: '5px 13px', fontSize: 12, fontWeight: 800 }}>
+            {newIds.size} NEW {newIds.size === 1 ? 'order' : 'orders'}
+          </span>
+        )}
       </div>
       {err && <div style={{ color: X.red, marginBottom: 8 }}>{err}</div>}
-      <div style={{ ...CARD, padding: 8, overflow: 'hidden' }}>
-        {shown.length === 0 && <div style={{ color: X.slate, padding: 16, fontSize: 14 }}>All clear — nothing in this view.</div>}
-        {shown.map((o) => <QueueRow key={o.id} order={o} onChanged={load} focus={focus} />)}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, alignItems: 'start' }}>
+        {LANES.map((lane) => {
+          const inLane = orders.filter((o) => lane.statuses.includes(o.status)).sort(bySchedule)
+          const laneNew = inLane.filter((o) => newIds.has(o.id)).length
+          return (
+            <div key={lane.key} style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
+              <div style={{ background: X.black, color: X.white, padding: '10px 14px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                <div>
+                  <span style={{ fontWeight: 800, fontSize: 13.5 }}>{lane.label}</span>
+                  <span style={{ color: 'rgba(255,255,253,0.55)', fontSize: 11, marginLeft: 8 }}>{lane.sub}</span>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 800, color: laneNew ? X.yellow : 'rgba(255,255,253,0.7)' }}>
+                  {inLane.length}{laneNew ? ` · ${laneNew} NEW` : ''}
+                </span>
+              </div>
+              <div style={{ padding: '2px 12px 8px', maxHeight: 560, overflowY: 'auto' }}>
+                {inLane.length === 0 && <div style={{ color: X.slate, padding: '14px 2px', fontSize: 13 }}>Nothing here right now.</div>}
+                {inLane.map((o) => (
+                  <QueueRow key={o.id} order={o} onChanged={load} focus={focus}
+                    isNew={newIds.has(o.id)} onOpened={markSeen} />
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function QueueRow({ order, onChanged, focus }) {
+function QueueRow({ order, onChanged, focus, isNew = false, onOpened = null }) {
+  const confirm = useConfirm()
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
   const rowRef = useRef(null)
@@ -97,6 +152,7 @@ function QueueRow({ order, onChanged, focus }) {
   useEffect(() => {
     if (focus?.id === order.id) {
       setOpen(true)
+      onOpened?.(order.id)
       setTimeout(() => rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
     }
   }, [focus, order.id])
@@ -109,7 +165,7 @@ function QueueRow({ order, onChanged, focus }) {
     try { await setOrderWorkOrder(order.id, dapDraft.trim() || null); await onChanged() } finally { setBusy(false) }
   }
 
-  const toggle = () => setOpen((v) => !v)
+  const toggle = () => setOpen((v) => { if (!v) onOpened?.(order.id); return !v })
 
   // The status control is a dropdown so the shop can move an order BOTH ways —
   // e.g. pull one back from In Progress to Approved if a bay frees up wrong,
@@ -117,6 +173,22 @@ function QueueRow({ order, onChanged, focus }) {
   // log (database trigger) and fires the customer/dealer notifications.
   async function setStatus(status) {
     if (status === order.status) return
+    const finalStep = status === 'completed' || status === 'cancelled'
+    const ok = await confirm({
+      title: status === 'completed' ? `Mark ${order.order_number} complete?`
+        : status === 'cancelled' ? `Cancel ${order.order_number}?`
+        : `Move ${order.order_number} to ${STATUS_LABELS[status]}?`,
+      message: 'The store sees this change immediately and the customer-facing status updates.',
+      summary: [
+        ['Order', order.order_number],
+        ['Customer', order.customer_name || '\u2014'],
+        ['From', STATUS_LABELS[order.status] ?? order.status],
+        ['To', STATUS_LABELS[status] ?? status],
+      ],
+      confirmLabel: status === 'completed' ? 'Mark complete' : status === 'cancelled' ? 'Cancel order' : 'Move it',
+      tone: finalStep && status === 'cancelled' ? 'danger' : 'default',
+    })
+    if (!ok) return
     setBusy(true)
     try { await updateOrderStatus(order.id, status); await onChanged() } finally { setBusy(false) }
   }
@@ -129,7 +201,10 @@ function QueueRow({ order, onChanged, focus }) {
   return (
     <div ref={rowRef} style={{ borderBottom: `1px solid ${X.line}`, padding: '11px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ fontFamily: FONT.body, fontSize: 12, color: X.slate, width: 92 }}>{order.order_number}</div>
+        <div style={{ fontFamily: FONT.body, fontSize: 12, color: X.slate, width: 92 }}>
+          {order.order_number}
+          {isNew && <span style={{ display: 'block', marginTop: 3, background: X.yellow, color: X.black, borderRadius: 5, padding: '1.5px 6px', fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', width: 'fit-content' }}>NEW</span>}
+        </div>
         <div style={{ flex: 1, cursor: 'pointer' }} onClick={toggle}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{order.customer_name || '—'}</div>
           <div style={{ fontSize: 12, color: X.slate }}>

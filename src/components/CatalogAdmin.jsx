@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getAllProducts, createProduct, updateProduct } from '../lib/adminDb'
+import { getOrderedProductIds, deleteProductPermanently } from '../lib/db'
+import { useConfirm } from './ConfirmDialog'
+import TabNav from './TabNav'
 import { getAuthorizedDealers } from '../lib/db'
 import { COLOR as X, FONT, CARD, money } from '../lib/theme'
 import ProgramsAdmin from './ProgramsAdmin'
@@ -9,17 +12,44 @@ import ProgramsAdmin from './ProgramsAdmin'
 // automatically), tier, coverage description, list price, cost, and
 // active/retired status. Nothing is stock or locked.
 export default function CatalogAdmin() {
+  const confirm = useConfirm()
   const [products, setProducts] = useState([])
   const [installers, setInstallers] = useState([])
+  const [ordered, setOrdered] = useState(new Set())
+  const [life, setLife] = useState('active')
   const [err, setErr] = useState('')
   const [adding, setAdding] = useState(false)
   const [openId, setOpenId] = useState(null)
 
   const load = () =>
-    Promise.all([getAllProducts(), getAuthorizedDealers()])
-      .then(([p, ad]) => { setProducts(p); setInstallers(ad) })
+    Promise.all([getAllProducts(), getAuthorizedDealers(), getOrderedProductIds()])
+      .then(([p, ad, oids]) => { setProducts(p); setInstallers(ad); setOrdered(oids) })
       .catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
+
+  async function confirmArchive(pr) {
+    const ok = await confirm({
+      title: pr.active ? `Archive "${pr.name}"?` : `Restore "${pr.name}"?`,
+      message: pr.active
+        ? 'Archiving removes it from every order screen and program link list. History, pricing, and reports are untouched — you can restore it any time.'
+        : 'Restoring makes it available to programs and order screens again.',
+      summary: [['Package', pr.name], ['Now', pr.active ? 'Active' : 'Archived'], ['After', pr.active ? 'Archived' : 'Active']],
+      confirmLabel: pr.active ? 'Archive package' : 'Restore package',
+    })
+    if (!ok) return
+    try { await updateProduct(pr.id, { active: !pr.active }); load() } catch (e) { setErr(e.message) }
+  }
+
+  async function confirmDelete(pr) {
+    const ok = await confirm({
+      title: `Permanently delete "${pr.name}"?`,
+      message: 'This package has never been ordered, so it can be removed completely. It will disappear from the catalog, every program, and every store — permanently.',
+      summary: [['Package', pr.name], ['SKU', pr.sku]],
+      confirmLabel: 'Delete forever', tone: 'danger', typeToConfirm: 'delete',
+    })
+    if (!ok) return
+    try { await deleteProductPermanently(pr.id); setOpenId(null); load() } catch (e) { setErr(e.message) }
+  }
 
   const categories = useMemo(() => [...new Set(products.map((p) => p.category).filter(Boolean))], [products])
 
@@ -33,8 +63,14 @@ export default function CatalogAdmin() {
 
       {adding && <ProductEditor categories={categories} onSave={async (f) => { await createProduct(f); setAdding(false); load() }} onError={setErr} isNew />}
 
+      <TabNav tabs={{ active: 'Active', archived: 'Archived', all: 'All' }} value={life} onChange={setLife} style={{ marginBottom: 10 }} />
       <div style={panel}>
-        {products.map((p) => (
+        {products.filter((p) => life === 'all' ? true : life === 'archived' ? !p.active : p.active).length === 0 && (
+          <div style={{ color: X.slate, padding: 14, fontSize: 13.5 }}>
+            {life === 'archived' ? 'Nothing archived. Archived packages land here, out of the way but never lost.' : 'No packages in this view yet.'}
+          </div>
+        )}
+        {products.filter((p) => life === 'all' ? true : life === 'archived' ? !p.active : p.active).map((p) => (
           <div key={p.id} style={{ borderTop: `1px solid ${X.line}` }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '9px 4px', opacity: p.active ? 1 : 0.45, cursor: 'pointer' }}
                  onClick={() => setOpenId(openId === p.id ? null : p.id)}>
@@ -46,6 +82,7 @@ export default function CatalogAdmin() {
                     ? <span style={{ color: '#8A6100', fontWeight: 700 }}> · by {installers.find((d) => d.id === p.authorized_dealer_id)?.name ?? 'installer'}</span>
                     : ' · XPEL house'}
                 </div>
+                {p.description && <div style={{ fontSize: 12, color: X.slate, marginTop: 3, lineHeight: 1.45 }}>{p.description}</div>}
               </div>
               <div style={{ width: 90, textAlign: 'right', fontWeight: 700 }}>
                 {p.unit_price != null
@@ -58,8 +95,12 @@ export default function CatalogAdmin() {
                   : '—'}
               </div>
               <span style={{ ...badge, background: p.active ? X.green : X.gray, color: p.active ? '#fff' : X.slate }}>
-                {p.active ? 'Active' : 'Retired'}
+                {p.active ? 'Active' : 'Archived'}
               </span>
+              <button onClick={(e) => { e.stopPropagation(); confirmArchive(p) }} style={lifeBtn}>{p.active ? 'Archive' : 'Restore'}</button>
+              {ordered.has(p.id)
+                ? <span title="Ordered before — order history depends on it, so it can only be archived." style={{ fontSize: 10, color: X.slate }}>archive only</span>
+                : <button onClick={(e) => { e.stopPropagation(); confirmDelete(p) }} style={{ ...lifeBtn, color: X.red, borderColor: 'rgba(125,20,25,0.4)' }}>Delete</button>}
               <span style={{ color: X.slate, fontSize: 12 }}>{openId === p.id ? '▲' : '▼'}</span>
             </div>
             {openId === p.id && (
@@ -160,6 +201,7 @@ const Field = ({ label, children }) => (
 
 const panel = { ...CARD, padding: 18, fontFamily: FONT.body }
 const input = { width: '100%', boxSizing: 'border-box', border: `1px solid ${X.gray}`, borderRadius: 10, padding: '10px 11px', fontSize: 14, fontFamily: FONT.body, background: '#FFFFFD' }
+const lifeBtn = { background: 'transparent', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '5px 10px', fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: FONT.body, flexShrink: 0 }
 const badge = { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: 700, borderRadius: 999, padding: '4px 10px' }
 const btnPrimary = { background: X.yellow, color: X.black, border: 'none', borderRadius: 10, padding: '10px 16px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, cursor: 'pointer', fontFamily: FONT.body }
 const btnGhost = { background: '#FFFFFD', color: X.slate, border: `1px solid ${X.gray}`, borderRadius: 10, padding: '10px 16px', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT.body }

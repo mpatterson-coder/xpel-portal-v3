@@ -29,7 +29,7 @@ export async function fetchPerformanceRows() {
       .from('order_items')
       .select(`quantity, unit_price, list_price, unit_cost,
         product:products(id, name, category, tier, cost),
-        order:orders(id, order_number, customer_name, vehicle_year, vehicle_make, vehicle_model,
+        order:orders(id, order_number, customer_name, vehicle_year, vehicle_make, vehicle_model, vehicle_size,
           created_at, completed_at, created_by, status, dealership_id, group_id,
           creator:profiles!orders_created_by_fkey(full_name, title),
           dealership:dealerships(name), group:dealership_groups(name))`)
@@ -49,6 +49,7 @@ export async function fetchPerformanceRows() {
       customerName: r.order.customer_name,
       vehicle: [r.order.vehicle_year, r.order.vehicle_make, r.order.vehicle_model].filter(Boolean).join(' '),
       status: r.order.status,
+      vehicleSize: r.order.vehicle_size ?? null,
       orderId: r.order.id,
       groupId: r.order.group_id,
       groupName: r.order.group?.name ?? '—',
@@ -73,13 +74,20 @@ export function applyFilters(rows, f = {}) {
   const fromTs = f.from ? new Date(f.from + 'T00:00:00') : null
   const toTs = f.to ? new Date(f.to + 'T23:59:59') : null
   return rows.filter((r) => {
-    if (r.status === 'cancelled') return false
+    // Cancelled orders never count toward the money — unless the person has
+    // explicitly asked to see cancelled orders via the status filter.
+    if (f.status) { if (r.status !== f.status) return false }
+    else if (r.status === 'cancelled') return false
     const d = new Date(r.date)
     if (fromTs && d < fromTs) return false
     if (toTs && d > toTs) return false
     if (f.category && r.category !== f.category) return false
     if (f.productId && r.productId !== f.productId) return false
     if (f.groupId && r.groupId !== f.groupId) return false
+    if (f.seller && r.sellerName !== f.seller) return false
+    if (f.store && r.dealershipName !== f.store) return false
+    if (f.size && (r.vehicleSize ?? '') !== f.size) return false
+    if (f.discounted && !((r.listRetail ?? r.retail) > r.retail)) return false
     return true
   })
 }
@@ -191,15 +199,24 @@ export function breakdown(rows, keyField) {
 // Options for the filter dropdowns, derived from the data the user can see.
 export function filterOptions(rows) {
   const cats = new Map(), prods = new Map(), groups = new Map()
+  const sellers = new Set(), stores = new Set(), sizes = new Set(), statuses = new Set()
   for (const r of rows) {
     cats.set(r.category, true)
     prods.set(r.productId, { id: r.productId, name: r.productName, category: r.category })
     groups.set(r.groupId, { id: r.groupId, name: r.groupName })
+    if (r.sellerName && r.sellerName !== '—') sellers.add(r.sellerName)
+    if (r.dealershipName && r.dealershipName !== '—') stores.add(r.dealershipName)
+    if (r.vehicleSize) sizes.add(r.vehicleSize)
+    if (r.status) statuses.add(r.status)
   }
   return {
     categories: Array.from(cats.keys()).sort(),
     products: Array.from(prods.values()).sort((a, b) => a.name.localeCompare(b.name)),
     groups: Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name)),
+    sellers: [...sellers].sort(),
+    stores: [...stores].sort(),
+    sizes: [...sizes].sort(),
+    statuses: [...statuses].sort(),
   }
 }
 

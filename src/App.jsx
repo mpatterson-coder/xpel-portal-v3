@@ -2,6 +2,8 @@ import { useAuth } from './context/AuthContext'
 import Login from './components/Login'
 import PageHero from './components/PageHero'
 import ErrorBoundary from './components/ErrorBoundary'
+import NotificationBell from './components/NotificationBell'
+import { ConfirmProvider } from './components/ConfirmDialog'
 import DealershipDashboard from './components/DealershipDashboard'
 import InstallerDashboard from './components/InstallerDashboard'
 import AdminDashboard from './components/AdminDashboard'
@@ -51,6 +53,7 @@ export default function App() {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <NotificationBell profile={profile} role={role} />
           <span style={{ color: 'rgba(255,255,253,0.85)', fontSize: 13 }}>
             {profile?.full_name || profile?.email}
             <span style={{
@@ -65,10 +68,12 @@ export default function App() {
 
       <div className="x-fade" style={{ flex: 1, width: '100%', padding: '28px 28px 56px', maxWidth: 1240, margin: '0 auto' }}>
         <ErrorBoundary>
+          <ConfirmProvider>
           <PageHero />
           {role === 'dealership' && <DealershipDashboard />}
           {role === 'installer' && <InstallerDashboard />}
           {role === 'admin' && <AdminDashboard />}
+          </ConfirmProvider>
         </ErrorBoundary>
       </div>
 

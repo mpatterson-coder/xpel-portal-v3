@@ -33,7 +33,9 @@ export default function ProgramsAdmin({ products, mode = 'admin', dealerId = nul
     } catch (e) { setErr(e.message) }
   }
 
-  const activeProducts = products.filter((p) => p.active)
+  // Archived packages leave the link list — except where still linked, so a
+  // program's owner can see (and unlink) them; those wear an ARCHIVED tag.
+  const activeProducts = products
 
   return (
     <div style={{ ...panel, marginTop: 16 }}>
@@ -79,7 +81,7 @@ function ProgramCard({ program, products, links, storeCount, ownerName, canEdit,
   const wholesaleByProduct = new Map(links.map((l) => [l.product_id, l.wholesale]))
 
   const byCategory = []
-  for (const p of products) {
+  for (const p of products.filter((x) => x.active || linkedIds.has(x.id))) {
     const cat = p.category || 'Other'
     let bucket = byCategory.find(([c]) => c === cat)
     if (!bucket) { bucket = [cat, []]; byCategory.push(bucket) }
@@ -134,7 +136,11 @@ function ProgramCard({ program, products, links, storeCount, ownerName, canEdit,
                 {items.map((p) => (
                   <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, padding: '7px 8px', borderRadius: 8, cursor: busy ? 'wait' : 'pointer', background: linkedIds.has(p.id) ? '#FFF7E0' : 'transparent' }}>
                     <input type="checkbox" checked={linkedIds.has(p.id)} disabled={busy || !canEdit} onChange={() => toggle(p)} />
-                    <span style={{ flex: 1, minWidth: 0, lineHeight: 1.35 }}>{p.name}</span>
+                    <span style={{ flex: 1, minWidth: 0, lineHeight: 1.35 }}>
+                      {p.name}
+                      {!p.active && <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', background: X.gray, color: X.slate, borderRadius: 4, padding: '2px 6px' }}>ARCHIVED</span>}
+                      {p.description && <span style={{ display: 'block', fontSize: 11.5, color: X.slate, marginTop: 2, lineHeight: 1.4 }}>{p.description}</span>}
+                    </span>
                     {linkedIds.has(p.id) && (
                       <WholesaleInput program={program} product={p} disabled={!canEdit}
                         value={wholesaleByProduct.get(p.id) ?? null} onChanged={onChanged} onError={onError} />

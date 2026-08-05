@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { onNavigate } from '../lib/bus'
 import { useAuth } from '../context/AuthContext'
 import { getDealerships, getAuthorizedDealers, getOrders, getMessages, sendMessage, markChannelRead, getUnreadState } from '../lib/db'
 import { COLOR as X, FONT, CARD } from '../lib/theme'
@@ -77,6 +78,17 @@ export default function MessagesHub({ mode, unread: unreadProp, onRead }) {
   }, [stores, dealers, orders, mode, dealerId, profile?.dealership_id])
 
   useEffect(() => { if (!sel && channels.length) setSel(channels[0]) }, [channels, sel])
+
+  // A tapped MESSAGE alert in the bell lands on that exact conversation.
+  const [pendingKey, setPendingKey] = useState(null)
+  useEffect(() => onNavigate((d) => {
+    if (d.channel) setPendingKey(`${d.channel.dealership_id}|${d.channel.order_id ?? 'general'}`)
+  }), [])
+  useEffect(() => {
+    if (!pendingKey) return
+    const found = channels.find((c) => c.key === pendingKey)
+    if (found) { setSel(found); setPendingKey(null) }
+  }, [pendingKey, channels])
 
   if (err) return <div style={{ color: X.red }}>{err}</div>
   if (stores === null) return <Spinner />

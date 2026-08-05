@@ -33,7 +33,7 @@ const daysAgoStr = (n) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const EMPTY_FILTERS = { preset: 'all', from: '', to: '', category: '', productId: '', groupId: '' }
+const EMPTY_FILTERS = { preset: 'all', from: '', to: '', category: '', productId: '', groupId: '', status: '', seller: '', store: '', size: '', discounted: false, compare: false }
 
 export default function PerformanceDashboard({ mode, onOpenOrder }) {
   const [rows, setRows] = useState(null)   // null = loading
@@ -53,11 +53,32 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
     return { from: daysAgoStr(Number(f.preset)), to: todayStr() }
   }, [f.preset, f.from, f.to])
 
+  const dims = { category: f.category, productId: f.productId, groupId: f.groupId, status: f.status, seller: f.seller, store: f.store, size: f.size, discounted: f.discounted }
   const filtered = useMemo(
-    () => applyFilters(rows ?? [], { ...range, category: f.category, productId: f.productId, groupId: f.groupId }),
-    [rows, range, f.category, f.productId, f.groupId],
+    () => applyFilters(rows ?? [], { ...range, ...dims }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, range, f.category, f.productId, f.groupId, f.status, f.seller, f.store, f.size, f.discounted],
   )
   const totals = useMemo(() => computeTotals(filtered), [filtered])
+
+  // Compare vs the previous period: the same-length window immediately before,
+  // with every other filter identical. "All time" has no "previous", so the
+  // toggle only appears when a bounded window is selected.
+  const canCompare = !!(range.from && range.to)
+  const cmp = f.compare && canCompare
+  const totalsPrev = useMemo(() => {
+    if (!cmp) return null
+    const from = new Date(range.from + 'T00:00:00')
+    const to = new Date(range.to + 'T00:00:00')
+    const days = Math.round((to - from) / 86400000) + 1
+    const pTo = new Date(from); pTo.setDate(pTo.getDate() - 1)
+    const pFrom = new Date(pTo); pFrom.setDate(pFrom.getDate() - (days - 1))
+    const iso = (d) => d.toISOString().slice(0, 10)
+    return computeTotals(applyFilters(rows ?? [], { from: iso(pFrom), to: iso(pTo), ...dims }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cmp, rows, range.from, range.to, f.category, f.productId, f.groupId, f.status, f.seller, f.store, f.size, f.discounted])
+  // Delta-percent helper: null when compare is off or the previous window was empty.
+  const dl = (cur, prev) => (!cmp || totalsPrev == null || !isFinite(prev) || prev === 0) ? null : Math.round(((cur - prev) / prev) * 100)
   const series = useMemo(() => timeSeries(filtered), [filtered])
   const byProduct = useMemo(() => breakdown(filtered, 'productName'), [filtered])
   const byCategory = useMemo(() => breakdown(filtered, 'category'), [filtered])
@@ -96,7 +117,7 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
     ]))
   }
   const productsInCategory = f.category ? opts.products.filter((p) => p.category === f.category) : opts.products
-  const filtersActive = f.preset !== 'all' || f.category || f.productId || f.groupId
+  const filtersActive = f.preset !== 'all' || f.category || f.productId || f.groupId || f.status || f.seller || f.store || f.size || f.discounted || f.compare
 
   const titles = {
     dealership: ['Store Performance', 'Margin on every order, tracked live.'],
@@ -136,6 +157,36 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
             {opts.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         )}
+        <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} style={sel}>
+          <option value="">All statuses</option>
+          {opts.statuses.map((st) => <option key={st} value={st}>{st.replace('_', ' ')}</option>)}
+        </select>
+        {mode === 'dealership' && (
+          <select value={f.seller} onChange={(e) => setF({ ...f, seller: e.target.value })} style={sel}>
+            <option value="">All team members</option>
+            {opts.sellers.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
+        {mode !== 'dealership' && (
+          <select value={f.store} onChange={(e) => setF({ ...f, store: e.target.value })} style={sel}>
+            <option value="">All stores</option>
+            {opts.stores.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
+        <select value={f.size} onChange={(e) => setF({ ...f, size: e.target.value })} style={sel}>
+          <option value="">All vehicle sizes</option>
+          {opts.sizes.map((z) => <option key={z} value={z}>{z === 'fullsize' ? 'FULL SIZE' : z === 'standard' ? 'STANDARD' : z}</option>)}
+        </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: X.slate, cursor: 'pointer' }}>
+          <input type="checkbox" checked={!!f.discounted} onChange={(e) => setF({ ...f, discounted: e.target.checked })} /> Discounted only
+        </label>
+        {canCompare && (
+          <button onClick={() => setF({ ...f, compare: !f.compare })}
+            title="Show change vs the same-length window immediately before this one"
+            style={{ ...clearBtn, ...(f.compare ? { background: X.black, color: X.white, borderColor: X.black } : {}) }}>
+            {f.compare ? '\u0394 vs previous \u00b7 on' : '\u0394 vs previous period'}
+          </button>
+        )}
         {filtersActive && (
           <button onClick={() => setF(EMPTY_FILTERS)} style={clearBtn}>Clear filters</button>
         )}
@@ -152,41 +203,41 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
             {mode === 'dealership' && (
               <>
-                <Kpi label="Revenue (retail)" value={totals.retail} format={fm0}
+                <Kpi label="Revenue (retail)" value={totals.retail} format={fm0} delta={dl(totals.retail, totalsPrev?.retail)}
                   onClick={() => openDrill('Revenue (retail)', filtered, 'retail')} />
-                <Kpi label="Your margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of revenue`}
+                <Kpi label="Your margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of revenue`} delta={dl(totals.margin, totalsPrev?.margin)}
                   onClick={() => openDrill('Your margin', filtered, 'margin')} />
-                <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages sold`}
+                <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages sold`} delta={dl(totals.orders, totalsPrev?.orders)}
                   onClick={() => openDrill('All orders', filtered, 'retail')} />
-                <Kpi label="Avg order" value={totals.avgOrder} format={fm0}
+                <Kpi label="Avg order" value={totals.avgOrder} format={fm0} delta={dl(totals.avgOrder, totalsPrev?.avgOrder)}
                   onClick={() => openDrill('All orders (avg basis)', filtered, 'retail')} />
-                <Kpi label="Discounts given" value={totals.discount} format={fm0} sub="off list price"
+                <Kpi label="Discounts given" value={totals.discount} format={fm0} sub="off list price" delta={dl(totals.discount, totalsPrev?.discount)} invert
                   onClick={() => openDrill('Discounted orders', filtered, 'discount', (o) => o.discount > 0)} />
               </>
             )}
             {mode === 'installer' && (
               <>
-                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0}
+                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0} delta={dl(totals.wholesale, totalsPrev?.wholesale)}
                   onClick={() => openDrill('Wholesale revenue', filtered, 'wholesale')} />
-                <Kpi label="Jobs" value={totals.orders}
+                <Kpi label="Jobs" value={totals.orders} delta={dl(totals.orders, totalsPrev?.orders)}
                   onClick={() => openDrill('All jobs', filtered, 'wholesale')} />
-                <Kpi label="Packages installed" value={totals.units}
+                <Kpi label="Packages installed" value={totals.units} delta={dl(totals.units, totalsPrev?.units)}
                   onClick={() => openDrill('Packages installed', filtered, 'units')} />
-                <Kpi label="Jobs completed" value={totals.completed} sub={`avg ${fm0(totals.avgWholesaleOrder)} / job`}
+                <Kpi label="Jobs completed" value={totals.completed} sub={`avg ${fm0(totals.avgWholesaleOrder)} / job`} delta={dl(totals.completed, totalsPrev?.completed)}
                   onClick={() => openDrill('Completed jobs', filtered, 'wholesale', (o) => o.status === 'completed')} />
-                <Kpi label="Avg completion" value={totals.avgCompletionDays ?? '—'} format={(v) => `${v.toFixed(1)} days`} sub="submitted → completed"
+                <Kpi label="Avg completion" value={totals.avgCompletionDays ?? '—'} format={(v) => `${v.toFixed(1)} days`} sub="submitted → completed" delta={dl(totals.avgCompletionDays ?? 0, totalsPrev?.avgCompletionDays ?? 0)} invert
                   onClick={() => openDrill('Completed jobs — days to complete', filtered, 'completionDays', (o) => o.completionDays != null)} />
               </>
             )}
             {mode === 'admin' && (
               <>
-                <Kpi label="Retail revenue" value={totals.retail} format={fm0}
+                <Kpi label="Retail revenue" value={totals.retail} format={fm0} delta={dl(totals.retail, totalsPrev?.retail)}
                   onClick={() => openDrill('Retail revenue', filtered, 'retail')} />
-                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0}
+                <Kpi label="Wholesale revenue" value={totals.wholesale} format={fm0} delta={dl(totals.wholesale, totalsPrev?.wholesale)}
                   onClick={() => openDrill('Wholesale revenue', filtered, 'wholesale')} />
-                <Kpi label="Dealer margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of retail`}
+                <Kpi label="Dealer margin" value={totals.margin} format={fm0} sub={`${totals.marginPct}% of retail`} delta={dl(totals.margin, totalsPrev?.margin)}
                   onClick={() => openDrill('Dealer margin', filtered, 'margin')} />
-                <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages`}
+                <Kpi label="Orders" value={totals.orders} sub={`${totals.units} packages`} delta={dl(totals.orders, totalsPrev?.orders)}
                   onClick={() => openDrill('All orders', filtered, 'retail')} />
               </>
             )}
@@ -260,7 +311,7 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
                               <td style={{ ...sellerTd, textAlign: 'right' }}>{sl.orders}</td>
                               <td style={{ ...sellerTd, textAlign: 'right' }}>{sl.units}</td>
                               <td style={{ ...sellerTd, textAlign: 'right', fontWeight: 700 }}>{fm0(sl.retail)}</td>
-                              <td style={{ ...sellerTd, textAlign: 'right', color: X.green }}>{fm0(sl.margin)}</td>
+                              <td style={{ ...sellerTd, textAlign: 'right', color: X.green, whiteSpace: 'nowrap' }}>{fm0(sl.margin)} <span style={{ color: X.slate, fontSize: 11.5 }}>({sl.retail > 0 ? Math.round((sl.margin / sl.retail) * 100) : 0}%)</span></td>
                             </tr>
                           ))}
                         </tbody>
@@ -299,7 +350,7 @@ export default function PerformanceDashboard({ mode, onOpenOrder }) {
                               onMouseEnter={(e) => { e.currentTarget.style.background = X.bg }}
                               onMouseLeave={(e) => { e.currentTarget.style.background = '' }}>
                             <Td>{r.name}</Td><Td r>{r.orders}</Td><Td r>{r.units}</Td>
-                            <Td r>{fm0(r.retail)}</Td><Td r style={{ color: X.green }}>{fm0(r.margin)}</Td>
+                            <Td r>{fm0(r.retail)}</Td><Td r style={{ color: X.green, whiteSpace: 'nowrap' }}>{fm0(r.margin)} <span style={{ color: X.slate, fontSize: 11.5 }}>({r.retail > 0 ? Math.round((r.margin / r.retail) * 100) : 0}%)</span></Td>
                           </tr>
                         ))}
                       </tbody>
@@ -346,7 +397,7 @@ function BarList({ items, valueKey, mode, onSelect }) {
             <span style={{ whiteSpace: 'nowrap' }}>
               {money(i[valueKey], 0)}
               <span style={{ color: X.slate, fontSize: 12 }}> · {i.units} unit{i.units === 1 ? '' : 's'}</span>
-              {mode !== 'installer' && <span style={{ color: X.green, fontSize: 12 }}> · {money(i.margin, 0)} margin</span>}
+              {mode !== 'installer' && <span style={{ color: X.green, fontSize: 12 }}> · {money(i.margin, 0)} ({i.retail > 0 ? Math.round((i.margin / i.retail) * 100) : 0}%) margin</span>}
             </span>
           </div>
           <div style={{ height: 8, background: X.stone, borderRadius: 999, marginTop: 5, overflow: 'hidden' }}>
@@ -376,10 +427,22 @@ function DrillPanel({ drill, mode, onClose, onOpenOrder }) {
     ? (o.completionDays != null ? `${o.completionDays.toFixed(1)} d` : '—')
     : metric === 'units'
       ? o.units
-      : money(o[metric] ?? 0, 0)
+      : metric === 'margin'
+        ? `${money(o.margin ?? 0, 0)} (${o.retail > 0 ? Math.round(((o.margin ?? 0) / o.retail) * 100) : 0}%)`
+        : money(o[metric] ?? 0, 0)
   const metricTotal = metric === 'completionDays' || metric === 'units'
     ? null
     : list.reduce((s2, o) => s2 + (o[metric] ?? 0), 0)
+
+  // Layer two: how this slice splits by team member (store view) or by rooftop
+  // — a mini-breakdown inside the drill, above the order list.
+  const splitDim = mode === 'dealership' ? 'sellerName' : 'dealershipName'
+  const splitKey = metric === 'completionDays' || metric === 'units' ? 'units' : metric
+  const split = useMemo(() => {
+    const b = breakdown(drill.rows, splitDim)
+    return [...b].sort((a, x) => (x[splitKey] ?? 0) - (a[splitKey] ?? 0)).slice(0, 5)
+  }, [drill.rows, splitDim, splitKey])
+  const splitMax = Math.max(...split.map((i) => i[splitKey] ?? 0), 1)
 
   const exportDrill = () => {
     const base = ['Order #', 'Date', 'Status', 'Customer', 'Vehicle', mode === 'dealership' ? 'Seller' : 'Store', 'Packages']
@@ -414,6 +477,24 @@ function DrillPanel({ drill, mode, onClose, onOpenOrder }) {
           <button onClick={exportDrill} style={drillCsvBtn}>CSV</button>
           <button onClick={onClose} title="Close" style={drillX}>×</button>
         </div>
+        {split.length > 1 && (
+          <div style={{ padding: '10px 18px 4px', borderBottom: `1px solid ${X.line}` }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: X.slate, marginBottom: 6 }}>
+              Split by {mode === 'dealership' ? 'team member' : 'store'}
+            </div>
+            {split.map((i) => (
+              <div key={i.key} style={{ marginBottom: 7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12 }}>
+                  <span style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.name}</span>
+                  <span style={{ whiteSpace: 'nowrap', color: X.slate }}>{splitKey === 'units' ? `${i.units} pkgs` : money(i[splitKey] ?? 0, 0)}</span>
+                </div>
+                <div style={{ height: 5, background: X.stone, borderRadius: 999, marginTop: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${((i[splitKey] ?? 0) / splitMax) * 100}%`, height: '100%', background: X.yellow, borderRadius: 999 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ overflowY: 'auto', padding: '6px 16px 14px' }}>
           {list.length === 0 && (
             <div style={{ color: X.slate, fontSize: 13.5, padding: '18px 4px' }}>No orders behind this number in the current range.</div>
@@ -454,7 +535,7 @@ const drillCsvBtn = { background: X.yellow, color: X.black, border: 'none', bord
 const drillX = { background: 'transparent', color: 'rgba(255,255,253,0.7)', border: 'none', fontSize: 22, lineHeight: 1, cursor: 'pointer', padding: '0 2px', flexShrink: 0 }
 const viewBtn = { background: '#FFFFFD', color: X.black, border: `1px solid ${X.gray}`, borderRadius: 8, padding: '6px 10px', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: FONT.body, flexShrink: 0, whiteSpace: 'nowrap' }
 
-const Kpi = ({ label, value, format, sub, onClick }) => {
+const Kpi = ({ label, value, format, sub, onClick, delta = null, invert = false }) => {
   const shown = useCountUp(value)
   const display = typeof value === 'number'
     ? (format ? format(shown) : Math.round(shown).toLocaleString())
@@ -467,6 +548,12 @@ const Kpi = ({ label, value, format, sub, onClick }) => {
       <div style={{ color: X.white, fontSize: 24, fontWeight: 800 }}>{display}</div>
       <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label}</div>
       {sub && <div style={{ color: '#8C8983', fontSize: 11, marginTop: 3 }}>{sub}</div>}
+      {delta != null && (
+        <div title="Change vs the previous period"
+          style={{ position: 'absolute', top: 12, right: 12, background: delta === 0 ? 'rgba(255,255,253,0.14)' : (invert ? delta < 0 : delta > 0) ? X.green : X.red, color: '#FFFFFD', borderRadius: 999, padding: '3px 9px', fontSize: 10.5, fontWeight: 800 }}>
+          {delta > 0 ? '\u25b2' : delta < 0 ? '\u25bc' : '\u2013'} {Math.abs(delta)}%
+        </div>
+      )}
     </div>
   )
 }

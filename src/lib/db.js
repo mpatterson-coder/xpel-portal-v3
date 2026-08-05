@@ -26,14 +26,15 @@ export async function getCatalog() {
     { data: aliasRows, error: nErr },
   ] = await Promise.all([
     supabase.from('program_products').select('wholesale, product:products(*)'),
-    supabase.from('dealership_pricing').select('product_id, unit_price'),
+    supabase.from('dealership_pricing').select('product_id, unit_price, hidden'),
     supabase.from('dealership_package_names').select('product_id, display_name'),
   ])
   if (aErr) throw aErr
   if (prErr) throw prErr
   if (nErr) throw nErr
 
-  const priceByProduct = new Map((prices ?? []).map((o) => [o.product_id, o.unit_price]))
+  const priceByProduct = new Map((prices ?? []).filter((o) => o.unit_price != null).map((o) => [o.product_id, o.unit_price]))
+  const hiddenSet = new Set((prices ?? []).filter((o) => o.hidden).map((o) => o.product_id))
   const aliasByProduct = new Map((aliasRows ?? []).map((o) => [o.product_id, o.display_name]))
   return (inProgram ?? [])
     .map((r) => ({ row: r, p: r.product }))
@@ -52,6 +53,8 @@ export async function getCatalog() {
       priced: (priceByProduct.has(p.id) ? priceByProduct.get(p.id) : p.unit_price) != null,
       // The installer's wholesale for this store's program (catalog default when unset).
       effective_wholesale: row.wholesale ?? p.cost,
+      // The store chose to hide this package from its order screen.
+      hidden: hiddenSet.has(p.id),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -259,8 +262,12 @@ export async function createOrder(profile, {
   customer_phone, customer_email, pickup_date,
   vin, vehicle_year, vehicle_make, vehicle_model, vehicle_trim, vehicle_size,
   dap_work_order, notes,
+  // Admin placing an order ON BEHALF of a store passes the store here.
+  onBehalf = null,
 }) {
-  if (!profile?.group_id || !profile?.dealership_id) {
+  const group_id = onBehalf?.group_id ?? profile?.group_id
+  const dealership_id = onBehalf?.dealership_id ?? profile?.dealership_id
+  if (!group_id || !dealership_id) {
     throw new Error('Your account is not yet assigned to a dealership. Ask an admin to finish setup.')
   }
   const total = (lines ?? []).reduce((sum, l) => sum + Number(l.quantity) * Number(l.unit_price), 0)
@@ -268,8 +275,8 @@ export async function createOrder(profile, {
   const { data: order, error: oErr } = await supabase
     .from('orders')
     .insert({
-      group_id: profile.group_id,
-      dealership_id: profile.dealership_id,
+      group_id,
+      dealership_id,
       created_by: profile.id,
       customer_name,
       customer_first_name,
@@ -385,4 +392,125 @@ export async function getNetworkPerformance() {
 export async function setOrderWorkOrder(orderId, dap_work_order) {
   const { error } = await supabase.from('orders').update({ dap_work_order }).eq('id', orderId)
   if (error) throw error
+}
+
+
+// ---- Notifications (order + network events; chat unread is separate) --------
+
+export async function getNotificationState(limit = 25) {
+  const [{ data: items, error: e1 }, { count, error: e2 }] = await Promise.all([
+    supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(limit),
+    supabase.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null),
+  ])
+  if (e1) throw e1
+  if (e2) throw e2
+  return { items: items ?? [], unread: count ?? 0 }
+}
+
+export async function markNotificationsRead(ids) {
+  if (!ids?.length) return
+  const { error } = await supabase.from('notifications')
+    .update({ read_at: new Date().toISOString() }).in('id', ids)
+  if (error) throw error
+}
+
+export async function markAllNotificationsRead() {
+  const { error } = await supabase.from('notifications')
+    .update({ read_at: new Date().toISOString() }).is('read_at', null)
+  if (error) throw error
+}
+
+// ---- NEW-order tracking (installer queue badges) ----------------------------
+
+export async function getOrderReads() {
+  const { data, error } = await supabase.from('order_reads').select('order_id')
+  if (error) throw error
+  return new Set((data ?? []).map((r) => r.order_id))
+}
+
+export async function markOrderRead(profileId, orderId) {
+  const { error } = await supabase.from('order_reads')
+    .upsert({ user_id: profileId, order_id: orderId }, { onConflict: 'user_id,order_id' })
+  if (error) throw error
+}
+
+// ---- Store-scoped catalog (admin editing / ordering on a store's behalf) ----
+
+export async function getCatalogFor(dealershipId) {
+  const { data: store, error: dErr } = await supabase
+    .from('dealerships').select('id, program_id').eq('id', dealershipId).single()
+  if (dErr) throw dErr
+  if (!store?.program_id) return []
+  const [
+    { data: inProgram, error: aErr },
+    { data: prices, error: prErr },
+    { data: aliasRows, error: nErr },
+  ] = await Promise.all([
+    supabase.from('program_products').select('wholesale, product:products(*)').eq('program_id', store.program_id),
+    supabase.from('dealership_pricing').select('product_id, unit_price, hidden').eq('dealership_id', dealershipId),
+    supabase.from('dealership_package_names').select('product_id, display_name').eq('dealership_id', dealershipId),
+  ])
+  if (aErr) throw aErr
+  if (prErr) throw prErr
+  if (nErr) throw nErr
+  const priceByProduct = new Map((prices ?? []).filter((o) => o.unit_price != null).map((o) => [o.product_id, o.unit_price]))
+  const hiddenSet = new Set((prices ?? []).filter((o) => o.hidden).map((o) => o.product_id))
+  const aliasByProduct = new Map((aliasRows ?? []).map((o) => [o.product_id, o.display_name]))
+  return (inProgram ?? [])
+    .map((r) => ({ row: r, p: r.product }))
+    .filter(({ p }) => p && p.active)
+    .map(({ row, p }) => ({
+      ...p,
+      canonical_name: p.name,
+      alias: aliasByProduct.get(p.id) ?? null,
+      name: aliasByProduct.get(p.id) ?? p.name,
+      base_price: p.unit_price,
+      price_overridden: priceByProduct.has(p.id),
+      effective_price: priceByProduct.has(p.id) ? priceByProduct.get(p.id) : p.unit_price,
+      priced: (priceByProduct.has(p.id) ? priceByProduct.get(p.id) : p.unit_price) != null,
+      effective_wholesale: row.wholesale ?? p.cost,
+      hidden: hiddenSet.has(p.id),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function setPackageHidden(dealership_id, product_id, hidden) {
+  const { error } = await supabase.from('dealership_pricing')
+    .upsert({ dealership_id, product_id, hidden }, { onConflict: 'dealership_id,product_id' })
+  if (error) throw error
+}
+
+// ---- Package lifecycle (archive / restore / permanent delete) ---------------
+
+export async function setProductActive(id, active) {
+  const { data, error } = await supabase.from('products')
+    .update({ active }).eq('id', id).select('id')
+  if (error) throw error
+  if (!data?.length) throw new Error('No permission to change this package.')
+}
+
+export async function getOrderedProductIds() {
+  const { data, error } = await supabase.from('order_items').select('product_id')
+  if (error) throw error
+  return new Set((data ?? []).map((r) => r.product_id))
+}
+
+export async function deleteProductPermanently(id) {
+  const { data, error } = await supabase.from('products')
+    .delete().eq('id', id).select('id')
+  if (error) {
+    if (String(error.message || '').includes('foreign key') || error.code === '23503') {
+      throw new Error('This package has been ordered before, so it can only be archived — order history depends on it.')
+    }
+    throw error
+  }
+  if (!data?.length) throw new Error('No permission to delete this package.')
+}
+
+
+// Admin command center: program -> product links for the whole network.
+export async function getProgramLinks() {
+  const { data, error } = await supabase.from('program_products').select('program_id, product_id')
+  if (error) throw error
+  return data ?? []
 }
