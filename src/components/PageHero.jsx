@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { getDealerships, getAuthorizedDealers } from '../lib/db'
 import { COLOR as X, FONT } from '../lib/theme'
 import { Sheen, CheckerBand } from './ui'
+import logoWhite from '../assets/xpel-white.png'
 
 // =============================================================================
 // The role hero — the xpel.com opening pattern (CAPS eyebrow, short confident
@@ -58,16 +59,13 @@ export default function PageHero() {
       <div style={hero}>
         <Sheen />
         <div aria-hidden="true" style={{ position: 'absolute', right: 120, bottom: -34, width: 130, height: 130, transform: 'skewX(-14deg)', background: 'rgba(231,228,218,0.05)', borderRadius: 6 }} />
-        <div aria-hidden="true" style={{ position: 'absolute', right: 44, top: 26, display: 'flex', gap: 5 }}>
-          <span style={{ ...chip, background: X.yellow }} />
-          <span style={{ ...chip, background: 'rgba(255,255,253,0.35)' }} />
-          <span style={{ ...chip, background: 'rgba(231,228,218,0.55)' }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: 'rgba(255,255,253,0.65)', fontWeight: 700 }}>
+        {/* The official mark, on every screen (Logo Usage — white on Carbon Black). */}
+        <img src={logoWhite} alt="XPEL" style={{ position: 'absolute', right: 28, top: 24, width: 112, opacity: 0.97 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, color: 'rgba(255,255,253,0.65)', fontWeight: 700, paddingRight: 126 }}>
           <span aria-hidden="true" style={{ width: 8, height: 8, background: X.yellow, transform: 'skewX(-14deg)' }} />
           {EYEBROW[role] ?? 'Dealership Portal'}
         </div>
-        <h1 style={{ margin: '10px 0 7px', color: X.white, fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.12 }}>
+        <h1 style={{ margin: '10px 0 7px', color: X.white, fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.12, paddingRight: 126 }}>
           {HEADLINE[role] ?? 'Dealership Portal'}
         </h1>
         <div style={{ color: 'rgba(255,255,253,0.62)', fontSize: 13.5 }}>
@@ -87,4 +85,3 @@ const hero = {
   borderRadius: 20, padding: '26px 30px 28px',
   clipPath: 'polygon(0 0, 100% 0, calc(100% - 28px) 100%, 0 100%)',
 }
-const chip = { width: 13, height: 13, transform: 'skewX(-14deg)', display: 'inline-block' }

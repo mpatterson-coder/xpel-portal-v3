@@ -67,6 +67,28 @@
       .x-lift { transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
       .x-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(20,18,19,.08), 0 20px 44px rgba(20,18,19,.12) !important; }
 
+      /* ---- "If you can click it, it says so." --------------------------------
+         Every interactive element gives three unmissable cues: the pointer
+         cursor, a visible hover response (tint + lift + shadow), and a yellow
+         keyboard-focus ring. Clickable table rows tint on hover automatically.
+         (These later rules deliberately override the softer ones above.) */
+      button:hover:not(:disabled) {
+        filter: brightness(1.05);
+        box-shadow: inset 0 0 0 999px rgba(20,18,19,0.045), 0 3px 10px rgba(20,18,19,0.14);
+        transform: translateY(-1px);
+      }
+      button:active:not(:disabled) {
+        transform: translateY(0) scale(.985);
+        box-shadow: inset 0 0 0 999px rgba(20,18,19,0.10);
+      }
+      button:disabled { cursor: not-allowed; }
+      button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+        outline: 3px solid rgba(253,181,33,.95); outline-offset: 2px;
+      }
+      select:hover:not(:disabled) { box-shadow: 0 0 0 3px rgba(20,18,19,.06); }
+      tr[style*="cursor: pointer"]:hover td { background: #F3F0E8; }
+      a:hover { text-decoration: underline; }
+
       @media (prefers-reduced-motion: reduce) {
         .x-fade, .x-spinner { animation: none !important; }
         *, *::before, *::after { transition: none !important; }

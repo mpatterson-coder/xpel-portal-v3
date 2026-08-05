@@ -196,6 +196,7 @@ function JobCard({ order: o, isNew, onOpen }) {
         {!o.dap_work_order
           ? <span style={{ ...chip, background: X.red, color: '#fff' }}>DAP # missing</span>
           : <span style={{ ...chip, border: `1px solid ${X.gray}`, color: X.slate }}>DAP {o.dap_work_order}</span>}
+        <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 800, color: hover ? X.black : X.slate, whiteSpace: 'nowrap' }}>Open ›</span>
       </div>
     </button>
   )

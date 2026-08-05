@@ -45,8 +45,8 @@ export default function App() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Frosted, sticky command bar — Carbon Black glass over the content. */}
       <div style={bar}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src={logoWhite} alt="XPEL" style={{ width: 104, display: 'block' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <img src={logoWhite} alt="XPEL" style={{ width: 104, display: 'block', flexShrink: 0 }} />
           <span aria-hidden="true" style={{ width: 8, height: 15, background: COLOR.yellow, transform: 'skewX(-14deg)' }} />
           <span style={{ color: COLOR.white, opacity: 0.92, fontWeight: FONT.subWeight, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.subtitleSpacing }}>
             Dealership Portal
@@ -94,7 +94,7 @@ export default function App() {
 
 const bar = {
   position: 'sticky', top: 0, zIndex: 50,
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 8,
   padding: '13px 24px',
   background: 'rgba(20, 18, 19, 0.86)',
   WebkitBackdropFilter: 'saturate(180%) blur(20px)',

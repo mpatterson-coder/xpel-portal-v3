@@ -562,7 +562,7 @@ const Kpi = ({ label, value, format, sub, onClick, delta = null, invert = false 
       style={{ position: 'relative', overflow: 'hidden', background: X.black, borderRadius: 16, padding: 18, fontFamily: FONT.body, boxShadow: '0 10px 28px rgba(20,18,19,0.18)', cursor: onClick ? 'pointer' : 'default' }}>
       <Sheen />
       <div style={{ color: X.white, fontSize: 24, fontWeight: 800 }}>{display}</div>
-      <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}>{label}</div>
+      <div style={{ color: X.yellow, fontSize: 11, textTransform: 'uppercase', letterSpacing: FONT.badgeSpacing, fontWeight: FONT.subWeight, marginTop: 4 }}><span>{label}</span>{onClick && <span aria-hidden="true">{' \u203a'}</span>}</div>
       {sub && <div style={{ color: '#8C8983', fontSize: 11, marginTop: 3 }}>{sub}</div>}
       {delta != null && (
         <div title="Change vs the previous period"

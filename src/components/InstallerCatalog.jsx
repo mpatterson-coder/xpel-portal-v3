@@ -4,7 +4,7 @@ import { getAllProducts, createProduct, updateProduct } from '../lib/adminDb'
 import { getOrderedProductIds, deleteProductPermanently } from '../lib/db'
 import { useConfirm } from './ConfirmDialog'
 import TabNav from './TabNav'
-import { COLOR as X, FONT, CARD, money } from '../lib/theme'
+import { COLOR as X, FONT, CARD, money, PRODUCT_CATEGORIES } from '../lib/theme'
 
 // =============================================================================
 // My Packages — the shop's own product line. Installers create packages with
@@ -156,12 +156,17 @@ function PackageEditor({ product, categories, isNew, dealerId, onSave, onToggleA
         </Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
-        <Field label="Category (free text — new sections appear automatically)">
-          <input list="inst-cat-suggestions" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} style={input} placeholder="e.g. Paint Protection Film" />
-          <datalist id="inst-cat-suggestions">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+        <Field label="Product category">
+          <select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} style={input}>
+            <option value="">Select a category…</option>
+            {PRODUCT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {f.category && !PRODUCT_CATEGORIES.includes(f.category) && (
+              <option value={f.category}>{f.category} (legacy)</option>
+            )}
+          </select>
         </Field>
-        <Field label="Tier / line (optional)">
-          <input value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} style={input} placeholder="e.g. Stealth" />
+        <Field label="Product Type">
+          <input value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} style={input} placeholder="e.g. STEALTH" />
         </Field>
         <Field label="Your wholesale (billed to the store)">
           <input type="number" min="0" step="0.01" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} style={input} />

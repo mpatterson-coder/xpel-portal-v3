@@ -4,12 +4,12 @@ import { getOrderedProductIds, deleteProductPermanently } from '../lib/db'
 import { useConfirm } from './ConfirmDialog'
 import TabNav from './TabNav'
 import { getAuthorizedDealers } from '../lib/db'
-import { COLOR as X, FONT, CARD, money } from '../lib/theme'
+import { COLOR as X, FONT, CARD, money, PRODUCT_CATEGORIES } from '../lib/theme'
 import ProgramsAdmin from './ProgramsAdmin'
 
 // Full-autonomy catalog management. EVERY field of every offering is editable
-// in-app: name, category (free text — creates new order-form sections
-// automatically), tier, coverage description, list price, cost, and
+// in-app: name, category (one of the four official product categories),
+// product type, coverage description, list price, cost, and
 // active/retired status. Nothing is stock or locked.
 export default function CatalogAdmin() {
   const confirm = useConfirm()
@@ -158,12 +158,17 @@ function ProductEditor({ product, categories, onSave, onToggleActive, onError, i
         </Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
-        <Field label="Category / product type (free text — new types create new sections)">
-          <input list="cat-suggestions" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} style={input} placeholder="e.g. Paint Protection Film" />
-          <datalist id="cat-suggestions">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+        <Field label="Product category">
+          <select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} style={input}>
+            <option value="">Select a category…</option>
+            {PRODUCT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {f.category && !PRODUCT_CATEGORIES.includes(f.category) && (
+              <option value={f.category}>{f.category} (legacy)</option>
+            )}
+          </select>
         </Field>
-        <Field label="Tier / line (optional)">
-          <input value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} style={input} placeholder="e.g. Ultimate Plus" />
+        <Field label="Product Type">
+          <input value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} style={input} placeholder="e.g. ULTIMATE PLUS" />
         </Field>
         <Field label="List price (blank = unpriced / hidden)">
           <input type="number" value={f.unit_price} onChange={(e) => setF({ ...f, unit_price: e.target.value })} style={input} />

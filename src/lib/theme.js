@@ -7,6 +7,15 @@
 // every screen in the portal.
 // =============================================================================
 
+// The four official product categories a package can belong to. Fixed set —
+// these drive the order screen's sections and every category filter.
+export const PRODUCT_CATEGORIES = [
+  'Paint Protection Film',
+  'Window Film',
+  'Windshield Protection Film',
+  'Ceramic Coating',
+]
+
 export const COLOR = {
   // Primary — must be present in every execution (p.20)
   yellow: '#FDB521',   // XPEL Yellow — Pantone 1235 C. Accent ONLY, never a dominant background (p.19)
